@@ -8,6 +8,9 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { getUserProfile, UserProfile } from '@/lib/firebase/firestore';
 
+// Admin user IDs
+const ADMIN_USERS = ['FaLWjIwujeghy34NGelI0rrB7Vk2'];
+
 export default function Navbar() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -52,6 +55,7 @@ export default function Navbar() {
 
   const displayName = userProfile?.nickname || userProfile?.displayName || user?.displayName || user?.email;
   const photoURL = userProfile?.photoURL || user?.photoURL;
+  const isAdmin = user && ADMIN_USERS.includes(user.uid);
 
   return (
     <nav className="bg-white shadow-sm">
@@ -168,6 +172,22 @@ export default function Navbar() {
                     >
                       ❤️ Reading List
                     </Link>
+                    <Link
+                      href="/dev-insights"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      onClick={() => setShowDropdown(false)}
+                    >
+                      💡 Dev Insights
+                    </Link>
+                    {isAdmin && (
+                      <Link
+                        href="/chat-rooms"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors border-l-4 border-red-500"
+                        onClick={() => setShowDropdown(false)}
+                      >
+                        🛡️ Chat Rooms (Admin)
+                      </Link>
+                    )}
                     <Link
                       href="/settings"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"

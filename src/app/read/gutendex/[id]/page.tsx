@@ -1,30 +1,89 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import Navbar from '@/components/layout/Navbar';
 import Link from 'next/link';
 import Loader from '@/components/ui/Loader';
 import { getGutendexBookById, getBookReadUrl, GutendexBook } from '@/lib/api/gutendex';
+import { toggleBookLike, checkUserLiked } from '@/lib/firebase/books';
+import BookReader from '@/components/reader/BookReader';
 
 export const dynamic = 'force-dynamic';
 
 function GutendexReaderContent() {
   const params = useParams();
-  const bookId = params.id as string;
+  const router = useRouter();
+  const { user } = useAuth();
+  const bookId = `gutendex-${params.id as string}`; // Use consistent ID format
+  const gutendexId = params.id as string;
   const [book, setBook] = useState<GutendexBook | null>(null);
+  const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [liking, setLiking] = useState(false);
 
   useEffect(() => {
     const fetchBook = async () => {
       try {
-        const bookData = await getGutendexBookById(parseInt(bookId));
+        const bookData = await getGutendexBookById(parseInt(gutendexId));
         if (!bookData) {
           setError('Book not found');
           return;
         }
         setBook(bookData);
+
+        // Fetch book content
+        const readUrl = getBookReadUrl(bookData);
+        if (readUrl) {
+          try {
+            // Use proxy to avoid CORS issues
+            const proxyUrl = `/api/gutendex-proxy?url=${encodeURIComponent(readUrl)}`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+            
+            const response = await fetch(proxyUrl, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+              const text = await response.text();
+              // Strip HTML tags for plain text reading
+              const plainText = text
+                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+                .replace(/<[^>]+>/g, '')
+                .replace(/&nbsp;/g, ' ')
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"')
+                .replace(/\s+/g, ' ')
+                .trim();
+              
+              if (plainText.length > 100) {
+                setContent(plainText);
+              } else {
+                setError('Book content is too short or empty');
+              }
+            } else {
+              setError('Failed to fetch book content');
+            }
+          } catch (fetchError) {
+            console.error('Error fetching content:', fetchError);
+            setError('Could not load book content. The book may not be available for reading.');
+          }
+        } else {
+          setError('No readable format available for this book');
+        }
+
+        // Check if user liked this book
+        if (user) {
+          const { liked: userLiked } = await checkUserLiked(bookId, user.uid);
+          setLiked(userLiked);
+        }
       } catch (err) {
         setError('Failed to load book');
       } finally {
@@ -33,7 +92,23 @@ function GutendexReaderContent() {
     };
 
     fetchBook();
-  }, [bookId]);
+  }, [bookId, gutendexId, user]);
+
+  const handleLike = async () => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+
+    if (liking) return;
+    
+    setLiking(true);
+    const { liked: newLikedState } = await toggleBookLike(bookId, user.uid);
+    
+    setLiked(newLikedState);
+    setLikeCount(prev => newLikedState ? prev + 1 : Math.max(0, prev - 1));
+    setLiking(false);
+  };
 
   if (loading) {
     return <Loader />;
@@ -59,9 +134,7 @@ function GutendexReaderContent() {
     );
   }
 
-  const readUrl = getBookReadUrl(book);
-
-  if (!readUrl) {
+  if (!content) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
@@ -69,7 +142,7 @@ function GutendexReaderContent() {
           <div className="bg-white rounded-lg shadow-sm p-8">
             <h1 className="text-2xl font-bold text-gray-900 mb-4">Reading Not Available</h1>
             <p className="text-gray-600 mb-6">
-              This book doesn&apos;t have an online reading format available.
+              This book doesn&apos;t have readable content available.
             </p>
             <Link
               href="/browse"
@@ -84,86 +157,14 @@ function GutendexReaderContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <h1 className="text-xl font-bold text-gray-900 truncate">{book.title}</h1>
-              <p className="text-sm text-gray-600">
-                by {book.authors.map(a => a.name).join(', ') || 'Unknown Author'}
-              </p>
-            </div>
-            <Link
-              href="/browse"
-              className="ml-4 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm font-medium"
-            >
-              ← Back
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="p-4 bg-blue-50 border-b border-blue-200">
-            <p className="text-sm text-blue-800">
-              <strong>📚 Project Gutenberg:</strong> This book is from Project Gutenberg&apos;s collection 
-              of over 60,000 free public domain books. Downloaded {book.download_count.toLocaleString()} times.
-            </p>
-          </div>
-
-          {/* Embedded Reader */}
-          <div className="relative" style={{ height: 'calc(100vh - 250px)', minHeight: '600px' }}>
-            <iframe
-              src={readUrl}
-              className="w-full h-full border-0"
-              title={book.title}
-              sandbox="allow-same-origin allow-scripts"
-            />
-          </div>
-
-          {/* Download Options */}
-          <div className="p-4 bg-gray-50 border-t border-gray-200">
-            <h3 className="font-semibold text-gray-900 mb-3">Download Options:</h3>
-            <div className="flex flex-wrap gap-3">
-              {book.formats['application/epub+zip'] && (
-                <a
-                  href={book.formats['application/epub+zip']}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium"
-                >
-                  📱 Download ePub
-                </a>
-              )}
-              {book.formats['text/plain'] && (
-                <a
-                  href={book.formats['text/plain']}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
-                >
-                  📄 Download Text
-                </a>
-              )}
-              {book.formats['text/html'] && (
-                <a
-                  href={book.formats['text/html']}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
-                >
-                  🌐 Open in New Tab
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <BookReader 
+      book={book} 
+      content={content}
+      liked={liked}
+      likeCount={likeCount}
+      onLike={handleLike}
+      liking={liking}
+    />
   );
 }
 

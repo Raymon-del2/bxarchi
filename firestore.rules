@@ -1,7 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
     // Users collection
     match /users/{userId} {
       allow read: if true;
@@ -38,6 +37,41 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow delete: if request.auth.uid == resource.data.userId;
+    }
+    
+    // Dev Insights Chat collection
+    match /devInsights/{messageId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth.uid == resource.data.userId;
+      allow delete: if request.auth.uid == resource.data.userId;
+    }
+    
+    // Private Chats collection
+    match /chats/{chatId} {
+      allow read: if request.auth != null && 
+        (request.auth.uid in resource.data.participants);
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && 
+        (request.auth.uid in resource.data.participants);
+    }
+    
+    // Private Chat Messages subcollection
+    match /chats/{chatId}/messages/{messageId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.senderId;
+    }
+    
+    // Direct Messages collection (used by chat page)
+    match /messages/{messageId} {
+      allow read: if request.auth != null && 
+        (request.auth.uid == resource.data.senderId || 
+         request.auth.uid == resource.data.receiverId);
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.senderId;
     }
   }
 }

@@ -60,6 +60,9 @@ export default function BrowseBooksPage() {
         const externalBooks = results?.results.map(convertGutendexBook) || [];
         setBooks([...localBooks, ...externalBooks]);
         setLoadingExternal(false);
+      } else if (searchQuery.length === 0) {
+        // Reset to all books when search is cleared
+        fetchBooks();
       }
     };
 
@@ -143,7 +146,7 @@ export default function BrowseBooksPage() {
               placeholder="Search by title or author..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900 bg-white"
             />
           </div>
 
@@ -225,9 +228,9 @@ export default function BrowseBooksPage() {
                 key={book.id}
                 onClick={() => {
                   if (isExternal) {
-                    // Extract Gutendex ID and navigate to reader
+                    // Extract Gutendex ID and navigate to details page
                     const gutendexId = book.id.replace('gutendex-', '');
-                    router.push(`/read/gutendex/${gutendexId}`);
+                    router.push(`/books/gutendex/${gutendexId}`);
                   } else {
                     router.push(`/books/${book.id}`);
                   }
