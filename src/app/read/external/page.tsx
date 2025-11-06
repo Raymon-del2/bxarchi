@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/components/layout/Navbar';
 import Link from 'next/link';
+import Loader from '@/components/ui/Loader';
 
 export const dynamic = 'force-dynamic';
 
-export default function ExternalReadPage() {
+function ExternalReadPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const url = searchParams.get('url');
@@ -100,5 +101,13 @@ export default function ExternalReadPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ExternalReadPage() {
+  return (
+    <Suspense fallback={<Loader />}>
+      <ExternalReadPageContent />
+    </Suspense>
   );
 }

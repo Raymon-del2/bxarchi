@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { createBook, updateBook, getBook } from '@/lib/firebase/books';
@@ -10,7 +10,7 @@ import Loader from '@/components/ui/Loader';
 
 export const dynamic = 'force-dynamic';
 
-export default function WritePage() {
+function WritePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -345,5 +345,13 @@ export default function WritePage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function WritePage() {
+  return (
+    <Suspense fallback={<Loader />}>
+      <WritePageContent />
+    </Suspense>
   );
 }
