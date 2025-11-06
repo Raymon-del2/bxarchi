@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users collection
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth.uid == userId;
+      allow delete: if request.auth.uid == userId;
+    }
+    
+    // Books collection
+    match /books/{bookId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth.uid == resource.data.authorId;
+      allow delete: if request.auth.uid == resource.data.authorId;
+    }
+    
+    // Book Likes collection
+    match /bookLikes/{likeId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow delete: if request.auth.uid == resource.data.userId;
+    }
+    
+    // Comments collection
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth.uid == resource.data.userId;
+      allow delete: if request.auth.uid == resource.data.userId;
+    }
+    
+    // Comment Likes collection
+    match /commentLikes/{likeId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow delete: if request.auth.uid == resource.data.userId;
+    }
+  }
+}
