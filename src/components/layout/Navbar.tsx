@@ -66,9 +66,17 @@ export default function Navbar() {
                 Browse Books
               </Link>
               {user && (
-                <Link href="/write" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium">
-                  Write a Book
-                </Link>
+                <>
+                  <Link href="/write" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium">
+                    Write a Book
+                  </Link>
+                  <Link href="/my-books" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium">
+                    My Books
+                  </Link>
+                  <Link href="/reading-list" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium">
+                    Reading List
+                  </Link>
+                </>
               )}
             </div>
           </div>
