@@ -4,13 +4,37 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getPublishedBooks } from '@/lib/firebase/books';
 import type { Book } from '@/lib/firebase/books';
-import { fetchPopularBooks, searchExternalBooks, fetchBooksByGenre, type ExternalBook } from '@/lib/api/openLibrary';
+import { getPopularGutendexBooks, searchGutendexBooks, getBookCoverUrl, extractGenreFromSubjects, type GutendexBook } from '@/lib/api/gutendex';
 import { generateBookPlaceholder } from '@/lib/utils/placeholderGenerator';
-import Image from 'next/image';
 import Navbar from '@/components/layout/Navbar';
 import Loader from '@/components/ui/Loader';
 
+// Convert Gutendex book to our format
+interface ExternalBook {
+  id: string;
+  title: string;
+  author: string;
+  coverUrl: string;
+  description: string;
+  genre: string;
+  isExternal: true;
+  downloadCount: number;
+}
+
 type CombinedBook = (Book & { isExternal?: false }) | ExternalBook;
+
+function convertGutendexBook(book: GutendexBook): ExternalBook {
+  return {
+    id: `gutendex-${book.id}`,
+    title: book.title,
+    author: book.authors.map(a => a.name).join(', ') || 'Unknown Author',
+    coverUrl: getBookCoverUrl(book),
+    description: book.subjects.slice(0, 2).join(', ') || 'Classic literature from Project Gutenberg',
+    genre: extractGenreFromSubjects(book.subjects),
+    isExternal: true,
+    downloadCount: book.download_count
+  };
+}
 
 export default function BrowseBooksPage() {
   const router = useRouter();
@@ -25,44 +49,23 @@ export default function BrowseBooksPage() {
     fetchBooks();
   }, []);
 
-  // Fetch external books when search or genre changes
+  // Fetch external books when search changes
   useEffect(() => {
     const fetchExternalBooks = async () => {
       if (searchQuery.length > 2) {
-        // Search external books when user types
         setLoadingExternal(true);
-        const results = await searchExternalBooks(searchQuery, 8);
-        
-        // Combine with local books
-        const { books: localBooks } = await getPublishedBooks();
-        setBooks([...localBooks, ...results]);
-        setLoadingExternal(false);
-      } else if (selectedGenre !== 'all' && selectedGenre !== 'other') {
-        // Fetch by genre
-        setLoadingExternal(true);
-        const genreMap: { [key: string]: string } = {
-          'fiction': 'Fiction',
-          'non-fiction': 'Nonfiction',
-          'mystery': 'Mystery',
-          'romance': 'Romance',
-          'sci-fi': 'Science Fiction',
-          'fantasy': 'Fantasy',
-          'thriller': 'Thriller',
-          'biography': 'Biography',
-          'self-help': 'Self-Help',
-          'poetry': 'Poetry',
-        };
-        const results = await fetchBooksByGenre(genreMap[selectedGenre] || selectedGenre, 8);
+        const results = await searchGutendexBooks(searchQuery, 1);
         
         const { books: localBooks } = await getPublishedBooks();
-        setBooks([...localBooks, ...results]);
+        const externalBooks = results?.results.map(convertGutendexBook) || [];
+        setBooks([...localBooks, ...externalBooks]);
         setLoadingExternal(false);
       }
     };
 
     const timeoutId = setTimeout(fetchExternalBooks, 500); // Debounce
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, selectedGenre]);
+  }, [searchQuery]);
 
   const fetchBooks = async () => {
     setLoading(true);
@@ -74,131 +77,133 @@ export default function BrowseBooksPage() {
       setError(fetchError);
     }
     
-    // Fetch external books from Open Library
+    // Fetch external books from Gutendex
     setLoadingExternal(true);
-    const externalBooks = await fetchPopularBooks(12);
+    const gutendexResponse = await getPopularGutendexBooks(1);
+    const externalBooks = gutendexResponse?.results.map(convertGutendexBook) || [];
     setLoadingExternal(false);
     
-    // Combine both sources
-    const combinedBooks: CombinedBook[] = [
-      ...fetchedBooks,
-      ...externalBooks,
-    ];
-    
-    setBooks(combinedBooks);
+    // Combine local and external books
+    setBooks([...fetchedBooks, ...externalBooks]);
     setLoading(false);
   };
 
-  // Filter books by genre and search query
-  const filteredBooks = books.filter(book => {
-    const author = book.isExternal ? book.author : (book as Book).authorName;
-    const matchesGenre = selectedGenre === 'all' || book.genre?.toLowerCase() === selectedGenre;
+  const genres = [
+    'all',
+    'fiction',
+    'non-fiction',
+    'mystery',
+    'romance',
+    'sci-fi',
+    'fantasy',
+    'thriller',
+    'biography',
+    'self-help',
+    'poetry',
+    'literature',
+    'history',
+    'philosophy',
+    'drama',
+    'other',
+  ];
+
+  const filteredBooks = books.filter((book) => {
+    const matchesGenre = selectedGenre === 'all' || book.genre === selectedGenre;
     const matchesSearch = searchQuery === '' || 
       book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      author.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (book.description && book.description.toLowerCase().includes(searchQuery.toLowerCase()));
+      (book.isExternal ? (book as ExternalBook).author : (book as Book).authorName)
+        .toLowerCase().includes(searchQuery.toLowerCase());
     
     return matchesGenre && matchesSearch;
   });
 
-  const genres = ['all', 'fiction', 'non-fiction', 'mystery', 'romance', 'sci-fi', 'fantasy', 'thriller', 'biography', 'self-help', 'poetry', 'other'];
+  if (loading) {
+    return <Loader />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Browse Books</h1>
-          <p className="mt-2 text-gray-600">
-            Discover amazing stories from our community and beyond
-            {loadingExternal && (
-              <span className="ml-2 text-sm text-indigo-600">
-                <span className="inline-block animate-pulse">● </span>
-                Searching external books...
-              </span>
-            )}
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Browse Books</h1>
+          <p className="text-gray-600">
+            Discover books from our community and Project Gutenberg&apos;s 60,000+ free classics
           </p>
         </div>
 
-        {/* Search Bar */}
-        <div className="mb-6 bg-white rounded-lg shadow-sm p-4">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
+        {/* Search and Filter */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          {/* Search Bar */}
+          <div className="mb-6">
             <input
               type="text"
-              placeholder="Search by title, author, or description..."
+              placeholder="Search by title or author..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900"
+              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center"
-              >
-                <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
+          </div>
+
+          {/* Genre Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Filter by Genre
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {genres.map((genre) => (
+                <button
+                  key={genre}
+                  onClick={() => setSelectedGenre(genre)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                    selectedGenre === genre
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {genre.charAt(0).toUpperCase() + genre.slice(1)}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Genre Filter */}
-        <div className="mb-8 bg-white rounded-lg shadow-sm p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-3">Filter by Genre</label>
-          <div className="flex flex-wrap gap-2">
-            {genres.map((genre) => (
-              <button
-                key={genre}
-                onClick={() => setSelectedGenre(genre)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                  selectedGenre === genre
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {genre.charAt(0).toUpperCase() + genre.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
-            {error}
+        {/* Loading External Books */}
+        {loadingExternal && (
+          <div className="text-center py-4">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <p className="text-gray-600 mt-2">Loading more books...</p>
           </div>
         )}
 
-        {/* Loading State */}
-        {loading && (
-          <div className="flex justify-center items-center py-20">
-            <div className="text-center">
-              <div className="flex justify-center">
-                <Loader />
-              </div>
-              <p className="mt-4 text-gray-600">Loading books...</p>
-            </div>
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-6">
+            {error}
           </div>
         )}
 
         {/* Empty State */}
         {!loading && filteredBooks.length === 0 && (
-          <div className="text-center py-20">
-            <svg className="mx-auto h-24 w-24 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          <div className="text-center py-12">
+            <svg
+              className="mx-auto h-16 w-16 text-gray-400 mb-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+              />
             </svg>
-            <h3 className="mt-4 text-lg font-medium text-gray-900">No books found</h3>
-            <p className="mt-2 text-gray-500">
+            <p className="text-gray-600">
               {selectedGenre === 'all' 
-                ? 'Be the first to publish a book!' 
+                ? 'No books found' 
                 : `No books in the ${selectedGenre} genre yet.`}
             </p>
           </div>
@@ -220,9 +225,9 @@ export default function BrowseBooksPage() {
                 key={book.id}
                 onClick={() => {
                   if (isExternal) {
-                    // Navigate to in-app external reader
-                    const encodedId = encodeURIComponent(book.id);
-                    router.push(`/read/${encodedId}`);
+                    // Extract Gutendex ID and navigate to reader
+                    const gutendexId = book.id.replace('gutendex-', '');
+                    router.push(`/read/gutendex/${gutendexId}`);
                   } else {
                     router.push(`/books/${book.id}`);
                   }
@@ -233,11 +238,8 @@ export default function BrowseBooksPage() {
                 <div className="relative h-64 bg-gray-200">
                   {isExternal && (
                     <div className="absolute top-2 right-2 z-10">
-                      <span className="inline-flex items-center px-2 py-1 text-xs font-bold bg-green-500 text-white rounded-full shadow-lg">
-                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                        EXTERNAL
+                      <span className="inline-flex items-center px-2 py-1 text-xs font-bold bg-purple-500 text-white rounded-full shadow-lg">
+                        📚 GUTENDEX
                       </span>
                     </div>
                   )}
@@ -247,7 +249,6 @@ export default function BrowseBooksPage() {
                     alt={book.title}
                     className="w-full h-full object-cover"
                     onError={(e) => {
-                      // Fallback to placeholder if image fails to load
                       const target = e.target as HTMLImageElement;
                       target.src = generateBookPlaceholder(book.title, author);
                     }}
@@ -283,17 +284,11 @@ export default function BrowseBooksPage() {
                         </svg>
                         {(book as Book).views || 0}
                       </div>
-                      <div className="flex items-center">
-                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                        </svg>
-                        {(book as Book).likes || 0}
-                      </div>
                     </div>
                   )}
                   {isExternal && (
-                    <div className="mt-3 text-xs text-green-600 font-medium">
-                      Click to read in-app
+                    <div className="mt-3 text-xs text-purple-600 font-medium">
+                      📖 {(book as ExternalBook).downloadCount.toLocaleString()} downloads
                     </div>
                   )}
                 </div>
