@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/components/layout/Navbar';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 export default function ExternalReadPage() {
   const router = useRouter();
   const searchParams = useSearchParams();

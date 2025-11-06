@@ -8,6 +8,8 @@ import Navbar from '@/components/layout/Navbar';
 import Image from 'next/image';
 import Loader from '@/components/ui/Loader';
 
+export const dynamic = 'force-dynamic';
+
 export default function WritePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
