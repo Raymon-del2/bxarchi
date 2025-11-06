@@ -65,6 +65,12 @@ export default function Navbar() {
               <Link href="/browse" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium">
                 Browse Books
               </Link>
+              <Link href="/new-books" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium relative">
+                New Books
+                <span className="absolute -top-1 -right-2 bg-green-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                  NEW
+                </span>
+              </Link>
               {user && (
                 <>
                   <Link href="/write" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium">
@@ -114,34 +120,67 @@ export default function Navbar() {
                 </button>
 
                 {showDropdown && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                    {/* Mobile-only navigation links */}
+                    <div className="md:hidden border-b border-gray-200 pb-1 mb-1">
+                      <Link
+                        href="/browse"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                        onClick={() => setShowDropdown(false)}
+                      >
+                        📚 Browse Books
+                      </Link>
+                      <Link
+                        href="/new-books"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                        onClick={() => setShowDropdown(false)}
+                      >
+                        ✨ New Books
+                      </Link>
+                      <Link
+                        href="/write"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                        onClick={() => setShowDropdown(false)}
+                      >
+                        ✍️ Write a Book
+                      </Link>
+                    </div>
+                    
+                    {/* Profile links */}
                     <Link
                       href="/setup-profile"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                       onClick={() => setShowDropdown(false)}
                     >
-                      Your Profile
+                      👤 Your Profile
                     </Link>
                     <Link
                       href="/my-books"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                       onClick={() => setShowDropdown(false)}
                     >
-                      My Books
+                      📖 My Books
+                    </Link>
+                    <Link
+                      href="/reading-list"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      onClick={() => setShowDropdown(false)}
+                    >
+                      ❤️ Reading List
                     </Link>
                     <Link
                       href="/settings"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                       onClick={() => setShowDropdown(false)}
                     >
-                      Settings
+                      ⚙️ Settings
                     </Link>
                     <hr className="my-1" />
                     <button
                       onClick={handleLogout}
                       className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 transition-colors"
                     >
-                      Sign out
+                      🚪 Sign out
                     </button>
                   </div>
                 )}
