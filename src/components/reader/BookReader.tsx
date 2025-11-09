@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { GutendexBook, getBookCoverUrl } from '@/lib/api/gutendex';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useAuth } from '@/contexts/AuthContext';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
 
 interface BookReaderProps {
   book: GutendexBook;
@@ -15,9 +18,11 @@ interface BookReaderProps {
 }
 
 export default function BookReader({ book, content, liked = false, likeCount = 0, onLike, liking = false }: BookReaderProps) {
+  const { user } = useAuth();
   const [currentPage, setCurrentPage] = useState(0);
   const [pages, setPages] = useState<string[]>([]);
   const [isMobile, setIsMobile] = useState(false);
+  const bookId = `gutendex-${book.id}`;
 
   useEffect(() => {
     // Check if mobile
@@ -40,6 +45,91 @@ export default function BookReader({ book, content, liked = false, likeCount = 0
     
     setPages(contentPages);
   }, [content]);
+
+  // Cache Gutendex book to Firestore
+  useEffect(() => {
+    const cacheBook = async () => {
+      if (!user) return;
+      
+      try {
+        const cachedBookRef = doc(db, 'cachedGutendexBooks', bookId);
+        const cachedBookSnap = await getDoc(cachedBookRef);
+        
+        // Only cache if not already cached
+        if (!cachedBookSnap.exists()) {
+          await setDoc(cachedBookRef, {
+            id: bookId,
+            gutendexId: book.id,
+            title: book.title,
+            authorName: book.authors.map(a => a.name).join(', ') || 'Unknown Author',
+            coverImage: getBookCoverUrl(book),
+            description: book.subjects.slice(0, 3).join(', ') || 'Classic literature from Project Gutenberg',
+            genre: book.subjects[0] || 'Classic',
+            content: content,
+            cached: true,
+            cachedAt: new Date()
+          });
+        }
+      } catch (error) {
+        console.error('Error caching Gutendex book:', error);
+      }
+    };
+    
+    if (content && user) {
+      cacheBook();
+    }
+  }, [book, content, user, bookId]);
+
+  // Save reading progress
+  const saveProgress = useCallback(async (page: number, total: number) => {
+    if (!user) return;
+    
+    try {
+      const progressRef = doc(db, 'readingProgress', `${user.uid}_${bookId}`);
+      await setDoc(progressRef, {
+        userId: user.uid,
+        bookId: bookId,
+        currentPage: page,
+        totalPages: total,
+        lastRead: new Date(),
+        completed: page === total - 1
+      });
+    } catch (error) {
+      console.error('Error saving progress:', error);
+    }
+  }, [user, bookId]);
+
+  // Load saved progress
+  useEffect(() => {
+    const loadProgress = async () => {
+      if (!user || pages.length === 0) return;
+      
+      try {
+        const progressRef = doc(db, 'readingProgress', `${user.uid}_${bookId}`);
+        const progressSnap = await getDoc(progressRef);
+        
+        if (progressSnap.exists()) {
+          const data = progressSnap.data();
+          const totalPages = pages.length + 3;
+          if (data.currentPage < totalPages) {
+            setCurrentPage(data.currentPage);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading progress:', error);
+      }
+    };
+    
+    loadProgress();
+  }, [user, bookId, pages.length]);
+
+  // Save progress when page changes
+  useEffect(() => {
+    if (pages.length > 0 && user) {
+      const totalPages = pages.length + 3;
+      saveProgress(currentPage, totalPages);
+    }
+  }, [currentPage, pages.length, user, saveProgress]);
 
   const totalPages = pages.length + 3; // Cover + Contents + Story pages + End
   const author = book.authors.map(a => a.name).join(', ') || 'Unknown Author';

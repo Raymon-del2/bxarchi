@@ -8,6 +8,8 @@ import { getPopularGutendexBooks, searchGutendexBooks, getBookCoverUrl, extractG
 import { generateBookPlaceholder } from '@/lib/utils/placeholderGenerator';
 import Navbar from '@/components/layout/Navbar';
 import Loader from '@/components/ui/Loader';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
 
 // Convert Gutendex book to our format
 interface ExternalBook {
@@ -73,21 +75,62 @@ export default function BrowseBooksPage() {
   const fetchBooks = async () => {
     setLoading(true);
     
-    // Fetch local books
+    // Fetch local BXARCHI books
     const { books: fetchedBooks, error: fetchError } = await getPublishedBooks();
     
     if (fetchError) {
       setError(fetchError);
     }
     
-    // Fetch external books from Gutendex
+    // Fetch cached Gutendex books from Firestore
+    let cachedGutendexBooks: ExternalBook[] = [];
+    try {
+      const cachedBooksRef = collection(db, 'cachedGutendexBooks');
+      const cachedBooksSnap = await getDocs(cachedBooksRef);
+      cachedGutendexBooks = cachedBooksSnap.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: data.id,
+          title: data.title,
+          author: data.authorName,
+          coverUrl: data.coverImage,
+          description: data.description,
+          genre: data.genre,
+          isExternal: true,
+          downloadCount: 0
+        } as ExternalBook;
+      });
+    } catch (error) {
+      console.error('Error fetching cached Gutendex books:', error);
+    }
+    
+    // Fetch fresh external books from Gutendex API
     setLoadingExternal(true);
-    const gutendexResponse = await getPopularGutendexBooks(1);
-    const externalBooks = gutendexResponse?.results.map(convertGutendexBook) || [];
+    let freshExternalBooks: ExternalBook[] = [];
+    try {
+      console.log('Fetching Gutendex books...');
+      const gutendexResponse = await getPopularGutendexBooks(1);
+      console.log('Gutendex response:', gutendexResponse);
+      freshExternalBooks = gutendexResponse?.results.map(convertGutendexBook) || [];
+      console.log('Fresh Gutendex books:', freshExternalBooks.length);
+    } catch (error) {
+      console.error('Error fetching Gutendex books:', error);
+    }
     setLoadingExternal(false);
     
-    // Combine local and external books
-    setBooks([...fetchedBooks, ...externalBooks]);
+    // Combine all books (BXARCHI + cached Gutendex + fresh Gutendex)
+    // Remove duplicates by keeping cached versions
+    const cachedIds = new Set(cachedGutendexBooks.map(b => b.id));
+    const uniqueFreshBooks = freshExternalBooks.filter(b => !cachedIds.has(b.id));
+    
+    console.log('Total books:', {
+      bxarchi: fetchedBooks.length,
+      cached: cachedGutendexBooks.length,
+      fresh: uniqueFreshBooks.length,
+      total: fetchedBooks.length + cachedGutendexBooks.length + uniqueFreshBooks.length
+    });
+    
+    setBooks([...fetchedBooks, ...cachedGutendexBooks, ...uniqueFreshBooks]);
     setLoading(false);
   };
 
@@ -129,6 +172,17 @@ export default function BrowseBooksPage() {
       <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Back Button */}
+        <button
+          onClick={() => router.back()}
+          className="flex items-center text-gray-600 hover:text-indigo-600 mb-6 transition-colors"
+        >
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back
+        </button>
+
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Browse Books</h1>

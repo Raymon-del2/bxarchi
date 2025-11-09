@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Navbar from '@/components/layout/Navbar';
 import Link from 'next/link';
 import Image from 'next/image';
+import EmojiPicker from '@/components/chat/EmojiPicker';
 import {
   collection,
   query,
@@ -47,7 +48,6 @@ export default function ChatPage({ params }: { params: { userId: string } }) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const emojis = ['😀', '😂', '😍', '🥰', '😎', '🤔', '👍', '👏', '🙌', '💪', '🔥', '✨', '❤️', '💯', '🎉', '🚀', '💡', '📚', '✅', '⭐'];
 
   const otherUserId = params.userId;
 
@@ -264,30 +264,10 @@ export default function ChatPage({ params }: { params: { userId: string } }) {
         <div className="bg-gray-100 relative">
           {/* Emoji Picker */}
           {showEmojiPicker && (
-            <div className="absolute bottom-full left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">Emojis</span>
-                <button
-                  onClick={() => setShowEmojiPicker(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="grid grid-cols-10 gap-2 max-h-32 overflow-y-auto">
-                {emojis.map((emoji, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => addEmoji(emoji)}
-                    className="text-2xl hover:bg-gray-100 rounded p-1 transition-colors"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <EmojiPicker
+              onEmojiSelect={addEmoji}
+              onClose={() => setShowEmojiPicker(false)}
+            />
           )}
 
           <form onSubmit={handleSendMessage} className="p-2 flex items-center space-x-2">

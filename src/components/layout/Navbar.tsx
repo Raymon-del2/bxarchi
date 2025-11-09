@@ -16,6 +16,7 @@ export default function Navbar() {
   const router = useRouter();
   const [showDropdown, setShowDropdown] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [showNewBadge, setShowNewBadge] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,6 +31,14 @@ export default function Navbar() {
 
     fetchUserProfile();
   }, [user]);
+
+  // Check if user has visited new books page
+  useEffect(() => {
+    const hasVisitedNewBooks = localStorage.getItem('hasVisitedNewBooks');
+    if (hasVisitedNewBooks === 'true') {
+      setShowNewBadge(false);
+    }
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -71,9 +80,11 @@ export default function Navbar() {
               </Link>
               <Link href="/new-books" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium relative">
                 New Books
-                <span className="absolute -top-1 -right-2 bg-green-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
-                  NEW
-                </span>
+                {showNewBadge && (
+                  <span className="absolute -top-1 -right-2 bg-green-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                    NEW
+                  </span>
+                )}
               </Link>
               {user && (
                 <>
@@ -136,10 +147,15 @@ export default function Navbar() {
                       </Link>
                       <Link
                         href="/new-books"
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors relative"
                         onClick={() => setShowDropdown(false)}
                       >
                         ✨ New Books
+                        {showNewBadge && (
+                          <span className="absolute top-2 right-2 bg-green-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                            NEW
+                          </span>
+                        )}
                       </Link>
                       <Link
                         href="/write"
@@ -178,6 +194,20 @@ export default function Navbar() {
                       onClick={() => setShowDropdown(false)}
                     >
                       💡 Dev Insights
+                    </Link>
+                    <Link
+                      href="/community"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      onClick={() => setShowDropdown(false)}
+                    >
+                      👥 Community
+                    </Link>
+                    <Link
+                      href="/resources"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      onClick={() => setShowDropdown(false)}
+                    >
+                      📚 Writer Resources
                     </Link>
                     {isAdmin && (
                       <Link

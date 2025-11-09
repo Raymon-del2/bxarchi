@@ -485,11 +485,11 @@ export default function DevInsightsPage() {
         {/* WhatsApp-style Header */}
         <div className="bg-indigo-600 text-white shadow-md">
           <div className="flex items-center px-4 py-3">
-            <Link href="/browse" className="mr-3 hover:bg-indigo-700 p-2 rounded-full transition-colors">
+            <button onClick={() => router.back()} className="mr-3 hover:bg-indigo-700 p-2 rounded-full transition-colors">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-            </Link>
+            </button>
             <div className="w-10 h-10 bg-indigo-500 rounded-full flex items-center justify-center mr-3">
               <span className="text-xl">💡</span>
             </div>

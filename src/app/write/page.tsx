@@ -21,7 +21,82 @@ function WritePageContent() {
   const [description, setDescription] = useState('');
   const [genre, setGenre] = useState('fiction');
   const [content, setContent] = useState('');
+  const [pages, setPages] = useState<string[]>(['']);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [writeMode, setWriteMode] = useState<'single' | 'pages'>('single');
+  const [genreSearch, setGenreSearch] = useState('');
+  const [showGenreDropdown, setShowGenreDropdown] = useState(false);
   const [coverImage, setCoverImage] = useState('');
+
+  // Comprehensive genre list
+  const allGenres = [
+    // Fiction
+    { value: 'literary-fiction', label: 'Literary Fiction', category: 'Fiction' },
+    { value: 'contemporary-fiction', label: 'Contemporary Fiction', category: 'Fiction' },
+    { value: 'historical-fiction', label: 'Historical Fiction', category: 'Fiction' },
+    { value: 'mystery', label: 'Mystery', category: 'Fiction' },
+    { value: 'cozy-mystery', label: 'Mystery - Cozy', category: 'Fiction' },
+    { value: 'detective-fiction', label: 'Mystery - Detective', category: 'Fiction' },
+    { value: 'police-procedural', label: 'Mystery - Police Procedural', category: 'Fiction' },
+    { value: 'noir', label: 'Mystery - Noir/Hardboiled', category: 'Fiction' },
+    { value: 'thriller', label: 'Thriller', category: 'Fiction' },
+    { value: 'psychological-thriller', label: 'Thriller - Psychological', category: 'Fiction' },
+    { value: 'crime-thriller', label: 'Thriller - Crime', category: 'Fiction' },
+    { value: 'political-thriller', label: 'Thriller - Political', category: 'Fiction' },
+    { value: 'techno-thriller', label: 'Thriller - Techno', category: 'Fiction' },
+    { value: 'horror', label: 'Horror', category: 'Fiction' },
+    { value: 'supernatural-horror', label: 'Horror - Supernatural', category: 'Fiction' },
+    { value: 'psychological-horror', label: 'Horror - Psychological', category: 'Fiction' },
+    { value: 'gothic-horror', label: 'Horror - Gothic', category: 'Fiction' },
+    { value: 'body-horror', label: 'Horror - Body Horror', category: 'Fiction' },
+    { value: 'sci-fi', label: 'Science Fiction', category: 'Fiction' },
+    { value: 'space-opera', label: 'Sci-Fi - Space Opera', category: 'Fiction' },
+    { value: 'cyberpunk', label: 'Sci-Fi - Cyberpunk', category: 'Fiction' },
+    { value: 'dystopian', label: 'Sci-Fi - Dystopian', category: 'Fiction' },
+    { value: 'time-travel', label: 'Sci-Fi - Time Travel', category: 'Fiction' },
+    { value: 'hard-scifi', label: 'Sci-Fi - Hard Sci-Fi', category: 'Fiction' },
+    { value: 'fantasy', label: 'Fantasy', category: 'Fiction' },
+    { value: 'high-fantasy', label: 'Fantasy - High/Epic', category: 'Fiction' },
+    { value: 'urban-fantasy', label: 'Fantasy - Urban', category: 'Fiction' },
+    { value: 'dark-fantasy', label: 'Fantasy - Dark', category: 'Fiction' },
+    { value: 'sword-sorcery', label: 'Fantasy - Sword & Sorcery', category: 'Fiction' },
+    { value: 'adventure', label: 'Adventure', category: 'Fiction' },
+    { value: 'romance', label: 'Romance', category: 'Fiction' },
+    { value: 'contemporary-romance', label: 'Romance - Contemporary', category: 'Fiction' },
+    { value: 'historical-romance', label: 'Romance - Historical', category: 'Fiction' },
+    { value: 'romantic-suspense', label: 'Romance - Suspense', category: 'Fiction' },
+    { value: 'paranormal-romance', label: 'Romance - Paranormal', category: 'Fiction' },
+    { value: 'young-adult', label: 'Young Adult (YA)', category: 'Fiction' },
+    { value: 'ya-fantasy', label: 'YA - Fantasy', category: 'Fiction' },
+    { value: 'ya-romance', label: 'YA - Romance', category: 'Fiction' },
+    { value: 'ya-dystopian', label: 'YA - Dystopian', category: 'Fiction' },
+    { value: 'coming-of-age', label: 'YA - Coming-of-Age', category: 'Fiction' },
+    { value: 'new-adult', label: 'New Adult', category: 'Fiction' },
+    { value: 'magical-realism', label: 'Magical Realism', category: 'Fiction' },
+    { value: 'utopian', label: 'Utopian', category: 'Fiction' },
+    { value: 'paranormal', label: 'Paranormal', category: 'Fiction' },
+    // Nonfiction
+    { value: 'biography', label: 'Biography/Autobiography', category: 'Nonfiction' },
+    { value: 'memoir', label: 'Memoir', category: 'Nonfiction' },
+    { value: 'self-help', label: 'Self-Help/Personal Development', category: 'Nonfiction' },
+    { value: 'true-crime', label: 'True Crime', category: 'Nonfiction' },
+    { value: 'history', label: 'History', category: 'Nonfiction' },
+    { value: 'philosophy', label: 'Philosophy', category: 'Nonfiction' },
+    { value: 'psychology', label: 'Psychology', category: 'Nonfiction' },
+    { value: 'science', label: 'Science', category: 'Nonfiction' },
+    { value: 'technology', label: 'Technology', category: 'Nonfiction' },
+    { value: 'travel', label: 'Travel', category: 'Nonfiction' },
+    { value: 'essay', label: 'Essay Collections', category: 'Nonfiction' },
+    { value: 'religion', label: 'Religion/Spirituality', category: 'Nonfiction' },
+    { value: 'business', label: 'Business/Economics', category: 'Nonfiction' },
+    // Hybrid & Emerging
+    { value: 'speculative', label: 'Speculative Fiction', category: 'Hybrid' },
+    { value: 'cli-fi', label: 'Cli-Fi (Climate Fiction)', category: 'Hybrid' },
+    { value: 'litrpg', label: 'LitRPG', category: 'Hybrid' },
+    { value: 'metafiction', label: 'Metafiction', category: 'Hybrid' },
+    { value: 'flash-fiction', label: 'Flash Fiction', category: 'Hybrid' },
+    { value: 'poetry', label: 'Poetry/Verse Novels', category: 'Hybrid' },
+  ];
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -51,6 +126,19 @@ function WritePageContent() {
     setDescription(book.description);
     setGenre(book.genre);
     setContent(book.content);
+    
+    // Split content into pages if it exists
+    if (book.content) {
+      const pageSize = 2000; // characters per page
+      const bookPages: string[] = [];
+      for (let i = 0; i < book.content.length; i += pageSize) {
+        bookPages.push(book.content.substring(i, i + pageSize));
+      }
+      if (bookPages.length > 0) {
+        setPages(bookPages);
+      }
+    }
+    
     setCoverImage(book.coverImage || '');
     setLoadingBook(false);
   }, [editId, user]);
@@ -124,18 +212,35 @@ function WritePageContent() {
       return;
     }
 
-    if (!title.trim() || !content.trim()) {
-      setError('Title and content are required');
+    // Validate based on write mode
+    if (!title.trim()) {
+      setError('Title is required');
       return;
+    }
+
+    if (writeMode === 'single' && !content.trim()) {
+      setError('Content is required');
+      return;
+    }
+
+    if (writeMode === 'pages') {
+      const hasContent = pages.some(page => page.trim().length > 0);
+      if (!hasContent) {
+        setError('At least one page must have content');
+        return;
+      }
     }
 
     setLoading(true);
 
+    // Combine pages into single content if in pages mode
+    const finalContent = writeMode === 'pages' ? pages.join('\n\n--- Page Break ---\n\n') : content.trim();
+    
     const bookData = {
       title: title.trim(),
       description: description.trim(),
       genre,
-      content: content.trim(),
+      content: finalContent,
       coverImage,
       authorId: user.uid,
       authorName: user.displayName || user.email || 'Anonymous',
@@ -196,6 +301,17 @@ function WritePageContent() {
       <Navbar />
 
       <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Back Button */}
+        <button
+          onClick={() => router.back()}
+          className="flex items-center text-gray-600 hover:text-indigo-600 mb-6 transition-colors"
+        >
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back
+        </button>
+
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
@@ -252,29 +368,86 @@ function WritePageContent() {
             />
           </div>
 
-          {/* Genre */}
-          <div>
+          {/* Genre - Searchable Dropdown */}
+          <div className="relative">
             <label htmlFor="genre" className="block text-sm font-medium text-gray-700 mb-2">
               Genre
             </label>
-            <select
-              id="genre"
-              value={genre}
-              onChange={(e) => setGenre(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 bg-white"
-            >
-              <option value="fiction">Fiction</option>
-              <option value="non-fiction">Non-Fiction</option>
-              <option value="mystery">Mystery</option>
-              <option value="romance">Romance</option>
-              <option value="sci-fi">Sci-Fi</option>
-              <option value="fantasy">Fantasy</option>
-              <option value="thriller">Thriller</option>
-              <option value="biography">Biography</option>
-              <option value="self-help">Self-Help</option>
-              <option value="poetry">Poetry</option>
-              <option value="other">Other</option>
-            </select>
+            <div className="relative">
+              <input
+                type="text"
+                value={genreSearch || allGenres.find(g => g.value === genre)?.label || ''}
+                onChange={(e) => {
+                  setGenreSearch(e.target.value);
+                  setShowGenreDropdown(true);
+                }}
+                onFocus={() => setShowGenreDropdown(true)}
+                placeholder="Search or select a genre..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 bg-white"
+              />
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+            
+            {/* Dropdown */}
+            {showGenreDropdown && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-96 overflow-y-auto">
+                <div className="sticky top-0 bg-gray-50 px-3 py-2 border-b border-gray-200">
+                  <p className="text-xs font-semibold text-gray-600">Select a genre ({allGenres.filter(g => 
+                    g.label.toLowerCase().includes(genreSearch.toLowerCase())
+                  ).length} results)</p>
+                </div>
+                {['Fiction', 'Nonfiction', 'Hybrid'].map(category => {
+                  const categoryGenres = allGenres.filter(g => 
+                    g.category === category && 
+                    g.label.toLowerCase().includes(genreSearch.toLowerCase())
+                  );
+                  
+                  if (categoryGenres.length === 0) return null;
+                  
+                  return (
+                    <div key={category}>
+                      <div className="px-3 py-2 bg-gray-100 border-b border-gray-200">
+                        <p className="text-xs font-bold text-gray-700">{category}</p>
+                      </div>
+                      {categoryGenres.map(g => (
+                        <button
+                          key={g.value}
+                          type="button"
+                          onClick={() => {
+                            setGenre(g.value);
+                            setGenreSearch('');
+                            setShowGenreDropdown(false);
+                          }}
+                          className={`w-full text-left px-4 py-2 hover:bg-indigo-50 transition-colors ${
+                            genre === g.value ? 'bg-indigo-100 text-indigo-900 font-medium' : 'text-gray-900'
+                          }`}
+                        >
+                          {g.label}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })}
+                {allGenres.filter(g => g.label.toLowerCase().includes(genreSearch.toLowerCase())).length === 0 && (
+                  <div className="px-4 py-8 text-center text-gray-500">
+                    <p>No genres found</p>
+                    <p className="text-sm mt-1">Try a different search term</p>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Close dropdown when clicking outside */}
+            {showGenreDropdown && (
+              <div 
+                className="fixed inset-0 z-0" 
+                onClick={() => setShowGenreDropdown(false)}
+              />
+            )}
           </div>
 
           {/* Cover Image */}
@@ -301,27 +474,134 @@ function WritePageContent() {
             )}
           </div>
 
-          {/* Content */}
+          {/* Writing Mode Toggle */}
           <div>
-            <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">
-              Book Content *
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Writing Mode
             </label>
-            <textarea
-              id="content"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Write your book content here..."
-              rows={20}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-gray-900"
-              required
-            />
-            <div className="mt-2 flex items-center justify-between text-sm text-gray-500">
-              <span>{content.length} characters</span>
-              {isEditMode && content && (
-                <span className="text-green-600">✓ Content loaded</span>
-              )}
+            <div className="flex space-x-4">
+              <button
+                type="button"
+                onClick={() => setWriteMode('single')}
+                className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                  writeMode === 'single'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                📝 Single Page
+              </button>
+              <button
+                type="button"
+                onClick={() => setWriteMode('pages')}
+                className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                  writeMode === 'pages'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                📚 Multiple Pages
+              </button>
             </div>
           </div>
+
+          {/* Content - Single Mode */}
+          {writeMode === 'single' && (
+            <div>
+              <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">
+                Book Content *
+              </label>
+              <textarea
+                id="content"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="Write your book content here..."
+                rows={20}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-gray-900 bg-white"
+                required
+              />
+              <div className="mt-2 flex items-center justify-between text-sm text-gray-500">
+                <span>{content.length} characters</span>
+              </div>
+            </div>
+          )}
+
+          {/* Content - Pages Mode */}
+          {writeMode === 'pages' && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <label className="block text-sm font-medium text-gray-700">
+                  Book Content * (Page {currentPage + 1} of {pages.length})
+                </label>
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newPages = [...pages];
+                      newPages.splice(currentPage + 1, 0, '');
+                      setPages(newPages);
+                      setCurrentPage(currentPage + 1);
+                    }}
+                    className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
+                  >
+                    + Add Page
+                  </button>
+                  {pages.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm('Delete this page?')) {
+                          const newPages = pages.filter((_, idx) => idx !== currentPage);
+                          setPages(newPages.length > 0 ? newPages : ['']);
+                          setCurrentPage(Math.max(0, currentPage - 1));
+                        }
+                      }}
+                      className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
+                    >
+                      🗑️ Delete Page
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              <textarea
+                value={pages[currentPage]}
+                onChange={(e) => {
+                  const newPages = [...pages];
+                  newPages[currentPage] = e.target.value;
+                  setPages(newPages);
+                }}
+                placeholder={`Write page ${currentPage + 1} content here...`}
+                rows={20}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-gray-900 bg-white"
+                required
+              />
+              
+              <div className="mt-4 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                  disabled={currentPage === 0}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  ← Previous Page
+                </button>
+                
+                <div className="text-sm text-gray-600">
+                  {pages[currentPage].length} characters on this page
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(Math.min(pages.length - 1, currentPage + 1))}
+                  disabled={currentPage === pages.length - 1}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  Next Page →
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex space-x-4 pt-4">

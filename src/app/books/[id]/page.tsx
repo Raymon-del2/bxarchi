@@ -10,6 +10,8 @@ import Navbar from '@/components/layout/Navbar';
 import CommentSection from '@/components/comments/CommentSection';
 import Loader from '@/components/ui/Loader';
 import BookLikeButton from '@/components/ui/BookLikeButton';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
 
 export default function BookPage() {
   const router = useRouter();
@@ -23,6 +25,7 @@ export default function BookPage() {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [liking, setLiking] = useState(false);
+  const [displayAuthorName, setDisplayAuthorName] = useState('');
 
   const fetchBook = useCallback(async () => {
     setLoading(true);
@@ -37,6 +40,28 @@ export default function BookPage() {
     } else if (fetchedBook) {
       setBook(fetchedBook);
       setLikeCount(fetchedBook.likes || 0);
+      
+      // Check author privacy settings
+      try {
+        const authorDoc = await getDoc(doc(db, 'users', fetchedBook.authorId));
+        if (authorDoc.exists()) {
+          const authorData = authorDoc.data();
+          const profileVisibility = authorData.profileVisibility || 'public';
+          const nickname = authorData.nickname || fetchedBook.authorName;
+          
+          // If private, show only nickname. If public, show full author name
+          if (profileVisibility === 'private') {
+            setDisplayAuthorName(nickname);
+          } else {
+            setDisplayAuthorName(fetchedBook.authorName);
+          }
+        } else {
+          setDisplayAuthorName(fetchedBook.authorName);
+        }
+      } catch (err) {
+        console.error('Error fetching author privacy:', err);
+        setDisplayAuthorName(fetchedBook.authorName);
+      }
       
       // Check if user liked this book
       if (user) {
@@ -147,7 +172,7 @@ export default function BookPage() {
             <div className="p-8 flex-1">
               <h1 className="text-3xl font-bold text-gray-900 mb-4">{book.title}</h1>
               
-              <p className="text-lg text-gray-600 mb-4">by {book.authorName}</p>
+              <p className="text-lg text-gray-600 mb-4">by {displayAuthorName || book.authorName}</p>
 
               {book.genre && (
                 <span className="inline-block px-3 py-1 text-sm font-medium bg-indigo-100 text-indigo-800 rounded-full mb-4">
@@ -203,16 +228,6 @@ export default function BookPage() {
                 >
                   Start Reading
                 </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Book Content */}
-          <div className="border-t border-gray-200 p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Read</h2>
-            <div className="prose max-w-none">
-              <div className="text-gray-800 leading-relaxed whitespace-pre-wrap font-serif text-lg">
-                {book.content}
               </div>
             </div>
           </div>

@@ -86,12 +86,18 @@ export async function getPopularGutendexBooks(
     // Sort by download count to get most popular
     const url = `${GUTENDEX_BASE_URL}/books/?page=${page}`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased to 15 seconds
 
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, { 
+      signal: controller.signal,
+      cache: 'no-store' // Prevent caching issues
+    });
     clearTimeout(timeoutId);
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.error('Gutendex API response not OK:', response.status);
+      return null;
+    }
 
     const data: GutendexResponse = await response.json();
     // Sort by download count

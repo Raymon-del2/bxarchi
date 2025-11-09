@@ -8,6 +8,8 @@ import type { Book } from '@/lib/firebase/books';
 import Navbar from '@/components/layout/Navbar';
 import Link from 'next/link';
 import Loader from '@/components/ui/Loader';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
 
 export default function ReadBookPage({ params }: { params: { id: string } }) {
   const { user } = useAuth();
@@ -19,6 +21,7 @@ export default function ReadBookPage({ params }: { params: { id: string } }) {
   const [pages, setPages] = useState<string[]>([]);
   const [fontSize, setFontSize] = useState(18);
   const [theme, setTheme] = useState<'light' | 'sepia' | 'dark'>('light');
+  const [displayAuthorName, setDisplayAuthorName] = useState('');
 
   const fetchBook = useCallback(async () => {
     setLoading(true);
@@ -37,6 +40,28 @@ export default function ReadBookPage({ params }: { params: { id: string } }) {
     }
 
     setBook(fetchedBook);
+    
+    // Check author privacy settings
+    try {
+      const authorDoc = await getDoc(doc(db, 'users', fetchedBook.authorId));
+      if (authorDoc.exists()) {
+        const authorData = authorDoc.data();
+        const profileVisibility = authorData.profileVisibility || 'public';
+        const nickname = authorData.nickname || fetchedBook.authorName;
+        
+        // If private, show only nickname
+        if (profileVisibility === 'private') {
+          setDisplayAuthorName(nickname);
+        } else {
+          setDisplayAuthorName(fetchedBook.authorName);
+        }
+      } else {
+        setDisplayAuthorName(fetchedBook.authorName);
+      }
+    } catch (err) {
+      console.error('Error fetching author privacy:', err);
+      setDisplayAuthorName(fetchedBook.authorName);
+    }
     
     // Split content into pages (every 3000 characters for comfortable reading)
     if (fetchedBook.content) {
@@ -59,6 +84,55 @@ export default function ReadBookPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     fetchBook();
   }, [fetchBook]);
+
+  // Save reading progress to Firestore
+  const saveProgress = useCallback(async (page: number, total: number) => {
+    if (!user) return;
+    
+    try {
+      const progressRef = doc(db, 'readingProgress', `${user.uid}_${params.id}`);
+      await setDoc(progressRef, {
+        userId: user.uid,
+        bookId: params.id,
+        currentPage: page,
+        totalPages: total,
+        lastRead: new Date(),
+        completed: page === total - 1
+      });
+    } catch (error) {
+      console.error('Error saving progress:', error);
+    }
+  }, [user, params.id]);
+
+  // Load saved progress
+  useEffect(() => {
+    const loadProgress = async () => {
+      if (!user || pages.length === 0) return;
+      
+      try {
+        const progressRef = doc(db, 'readingProgress', `${user.uid}_${params.id}`);
+        const progressSnap = await getDoc(progressRef);
+        
+        if (progressSnap.exists()) {
+          const data = progressSnap.data();
+          if (data.currentPage < pages.length) {
+            setCurrentPage(data.currentPage);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading progress:', error);
+      }
+    };
+    
+    loadProgress();
+  }, [user, params.id, pages.length]);
+
+  // Save progress when page changes
+  useEffect(() => {
+    if (pages.length > 0 && user) {
+      saveProgress(currentPage, pages.length);
+    }
+  }, [currentPage, pages.length, user, saveProgress]);
 
   const handleNextPage = () => {
     if (currentPage < pages.length - 1) {
@@ -190,7 +264,7 @@ export default function ReadBookPage({ params }: { params: { id: string } }) {
         {/* Book Info */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold mb-2">{book.title}</h1>
-          <p className="text-lg opacity-75">by {book.authorName}</p>
+          <p className="text-lg opacity-75">by {displayAuthorName || book.authorName}</p>
         </div>
 
         {/* Page Navigation */}

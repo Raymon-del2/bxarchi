@@ -17,6 +17,18 @@ module.exports = {
           DEFAULT: '#2d3748',
           light: '#4a5568',
         },
+        theme: {
+          'bg-primary': 'rgb(var(--bg-primary) / <alpha-value>)',
+          'bg-secondary': 'rgb(var(--bg-secondary) / <alpha-value>)',
+          'bg-tertiary': 'rgb(var(--bg-tertiary) / <alpha-value>)',
+          'text-primary': 'rgb(var(--text-primary) / <alpha-value>)',
+          'text-secondary': 'rgb(var(--text-secondary) / <alpha-value>)',
+          'text-tertiary': 'rgb(var(--text-tertiary) / <alpha-value>)',
+          'border': 'rgb(var(--border-color) / <alpha-value>)',
+          'accent': 'rgb(var(--accent-primary) / <alpha-value>)',
+          'accent-secondary': 'rgb(var(--accent-secondary) / <alpha-value>)',
+          'accent-hover': 'rgb(var(--accent-hover) / <alpha-value>)',
+        },
       },
       keyframes: {
         domino: {

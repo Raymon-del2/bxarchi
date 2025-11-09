@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 import Navbar from '@/components/layout/Navbar';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -14,10 +15,14 @@ interface UserProfile {
   bio?: string;
   profilePicture?: string;
   createdAt: any;
+  email?: string;
+  profileVisibility?: 'public' | 'private';
+  showEmail?: boolean;
 }
 
 export default function CommunityPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
@@ -33,6 +38,16 @@ export default function CommunityPage() {
         const users: UserProfile[] = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
+          
+          // Check privacy settings - only show public profiles or current user
+          const isCurrentUser = doc.id === user?.uid;
+          const profileVisibility = data.profileVisibility || 'public';
+          
+          // Skip private profiles unless it's the current user
+          if (profileVisibility === 'private' && !isCurrentUser) {
+            return;
+          }
+          
           // Include ALL users (including current user)
           const userProfile = {
             uid: doc.id,
@@ -40,14 +55,10 @@ export default function CommunityPage() {
             bio: data.bio || '',
             profilePicture: data.photoURL || data.profilePicture || '', // Check both fields
             createdAt: data.createdAt,
+            email: data.email || '',
+            profileVisibility: profileVisibility,
+            showEmail: data.showEmail || false,
           };
-          
-          // Debug log for current user
-          if (doc.id === user?.uid) {
-            console.log('Current user profile data:', userProfile);
-            console.log('photoURL:', data.photoURL);
-            console.log('profilePicture:', data.profilePicture);
-          }
           
           users.push(userProfile);
         });
@@ -177,7 +188,7 @@ export default function CommunityPage() {
                   } transition-all ${!isCurrentUser ? 'cursor-pointer' : ''}`}
                   onClick={() => {
                     if (!isCurrentUser) {
-                      window.location.href = `/chat/${profile.uid}`;
+                      router.push(`/chat/${profile.uid}`);
                     }
                   }}
                 >
@@ -211,17 +222,32 @@ export default function CommunityPage() {
 
                     {/* User Info */}
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-lg font-semibold text-gray-900 truncate flex items-center">
+                      <h3 className="text-lg font-semibold text-gray-900 truncate flex items-center flex-wrap gap-2">
                         {profile.nickname}
                         {isCurrentUser && (
-                          <span className="ml-2 text-xs bg-indigo-600 text-white px-2 py-1 rounded-full">
-                            Your Profile
-                          </span>
+                          <>
+                            <span className="text-xs bg-indigo-600 text-white px-2 py-1 rounded-full">
+                              Your Profile
+                            </span>
+                            {profile.profileVisibility === 'private' && (
+                              <span className="text-xs bg-gray-600 text-white px-2 py-1 rounded-full flex items-center">
+                                🔒 Private
+                              </span>
+                            )}
+                          </>
                         )}
                       </h3>
                       {profile.bio && (
                         <p className="mt-1 text-sm text-gray-600 line-clamp-2">
                           {profile.bio}
+                        </p>
+                      )}
+                      {profile.showEmail && profile.email && (
+                        <p className="mt-1 text-xs text-gray-500 flex items-center">
+                          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                          {profile.email}
                         </p>
                       )}
                       {!isCurrentUser && (

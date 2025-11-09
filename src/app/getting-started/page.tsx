@@ -36,15 +36,9 @@ export default function GettingStartedPage() {
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">
                   Click the &quot;Get Started&quot; button at the top right
                 </h2>
-                <p className="text-gray-600 text-lg mb-4">
+                <p className="text-gray-600 text-lg">
                   Look for the purple &quot;Get Started&quot; button in the navigation bar to create your account.
                 </p>
-                <button
-                  onClick={() => router.push('/register')}
-                  className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
-                >
-                  Get Started
-                </button>
               </div>
             </div>
             

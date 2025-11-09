@@ -73,5 +73,27 @@ service cloud.firestore {
       allow delete: if request.auth != null && 
         request.auth.uid == resource.data.senderId;
     }
+    
+    // Cached Gutendex Books collection (legacy)
+    match /cachedGutendexBooks/{bookId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+    }
+    
+    // Cached Google Books collection
+    match /cachedGoogleBooks/{bookId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+    }
+    
+    // Reading Progress collection
+    match /readingProgress/{progressId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
   }
 }
