@@ -8,6 +8,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 
+interface BookPage {
+  content: string;
+  type: 'cover' | 'intro' | 'normal' | 'end';
+  number: string;
+}
+
 interface BookReaderProps {
   book: GutendexBook;
   content: string;
@@ -20,7 +26,7 @@ interface BookReaderProps {
 export default function BookReader({ book, content, liked = false, likeCount = 0, onLike, liking = false }: BookReaderProps) {
   const { user } = useAuth();
   const [currentPage, setCurrentPage] = useState(0);
-  const [pages, setPages] = useState<string[]>([]);
+  const [pages, setPages] = useState<BookPage[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const bookId = `gutendex-${book.id}`;
 
@@ -35,21 +41,101 @@ export default function BookReader({ book, content, liked = false, likeCount = 0
   }, []);
 
   useEffect(() => {
-    // Split content into pages (approximately 2000 characters per page)
-    const charsPerPage = 2000;
-    const contentPages: string[] = [];
+    // Split content preserving chapter headers, intro pages, and page breaks
+    let contentPages: BookPage[] = [];
     
-    for (let i = 0; i < content.length; i += charsPerPage) {
-      contentPages.push(content.slice(i, i + charsPerPage));
+    // Check if content has explicit page breaks or chapter headers
+    if (content.includes('--- Page Break ---') || content.includes('PAGE ') || content.includes('INTRO ') || content.includes('COVER') || content.includes('END')) {
+      // Match different page types - more flexible patterns
+      const introPattern = /(INTRO\s+([IVXLCDM]+)\s*—\s*"[^"]*")/g;
+      const pagePattern = /(PAGE\s+(\d+)\s*—\s*"[^"]*")/g;
+      const coverPattern = /COVER/g;
+      const endPattern = /END/g;
+      const breakPattern = /--- Page Break ---/g;
+      
+      // Process content to identify page types
+      let processedContent = content
+        .replace(breakPattern, '===PAGE_BREAK===') // Temporarily replace breaks
+        .replace(coverPattern, '===SPECIAL_PAGE===COVER===') // Mark cover pages
+        .replace(endPattern, '===SPECIAL_PAGE===END===') // Mark end pages
+        .replace(introPattern, '===INTRO_PAGE===ROMAN $2===') // Mark intro pages with Roman numerals
+        .replace(pagePattern, '===NORMAL_PAGE===PAGE $2==='); // Mark normal pages
+      
+      // Split by page breaks
+      const rawPages = processedContent.split('===PAGE_BREAK===');
+      
+      contentPages = rawPages.map((page, index) => {
+        const cleanPage = page.trim();
+        if (!cleanPage) return null;
+        
+        // Extract page type and clean content
+        let pageType: 'cover' | 'intro' | 'normal' | 'end' = 'normal';
+        let pageNumber = '';
+        let cleanContent = cleanPage;
+        
+        if (cleanPage.includes('===SPECIAL_PAGE===COVER===')) {
+          pageType = 'cover';
+          pageNumber = '0';
+          cleanContent = cleanPage.replace('===SPECIAL_PAGE===COVER===', '').trim();
+        } else if (cleanPage.includes('===SPECIAL_PAGE===END===')) {
+          pageType = 'end';
+          pageNumber = '0';
+          cleanContent = cleanPage.replace('===SPECIAL_PAGE===END===', '').trim();
+        } else if (cleanPage.includes('===INTRO_PAGE===ROMAN')) {
+          pageType = 'intro';
+          const romanMatch = cleanPage.match(/===INTRO_PAGE===ROMAN ([IVXLCDM]+)===/);
+          if (romanMatch) {
+            pageNumber = romanMatch[1];
+          }
+          cleanContent = cleanPage.replace(/===INTRO_PAGE===ROMAN [IVXLCDM]+===/, '').trim();
+        } else if (cleanPage.includes('===NORMAL_PAGE===PAGE')) {
+          const pageMatch = cleanPage.match(/===NORMAL_PAGE===PAGE (\d+)===/);
+          if (pageMatch) {
+            pageNumber = pageMatch[1];
+          }
+          cleanContent = cleanPage.replace(/===NORMAL_PAGE===PAGE \d+===/, '').trim();
+        } else {
+          // Default page numbering for unmarked pages
+          pageNumber = String(index + 1);
+        }
+        
+        return {
+          content: cleanContent,
+          type: pageType,
+          number: pageNumber
+        };
+      }).filter((page): page is BookPage => page !== null && page.content.length > 0);
+    } else {
+      // Fallback to character-based pagination
+      const charsPerPage = 2000;
+      for (let i = 0; i < content.length; i += charsPerPage) {
+        contentPages.push({
+          content: content.slice(i, i + charsPerPage),
+          type: 'normal',
+          number: String(Math.floor(i / charsPerPage) + 1)
+        });
+      }
+    }
+    
+    // If no pages were created, create one with all content
+    if (contentPages.length === 0 && content) {
+      contentPages = [{
+        content: content,
+        type: 'normal',
+        number: '1'
+      }];
     }
     
     setPages(contentPages);
   }, [content]);
 
-  // Cache Gutendex book to Firestore
+  // Cache Gutendex book to Firestore (only for actual Gutendex books)
   useEffect(() => {
     const cacheBook = async () => {
       if (!user) return;
+      
+      // Only cache if this is actually a Gutendex book (starts with 'gutendex-')
+      if (!bookId.startsWith('gutendex-')) return;
       
       try {
         const cachedBookRef = doc(db, 'cachedGutendexBooks', bookId);
@@ -110,7 +196,7 @@ export default function BookReader({ book, content, liked = false, likeCount = 0
         
         if (progressSnap.exists()) {
           const data = progressSnap.data();
-          const totalPages = pages.length + 3;
+          const totalPages = Math.ceil(pages.length / 2) + 3;
           if (data.currentPage < totalPages) {
             setCurrentPage(data.currentPage);
           }
@@ -126,12 +212,12 @@ export default function BookReader({ book, content, liked = false, likeCount = 0
   // Save progress when page changes
   useEffect(() => {
     if (pages.length > 0 && user) {
-      const totalPages = pages.length + 3;
+      const totalPages = Math.ceil(pages.length / 2) + 3;
       saveProgress(currentPage, totalPages);
     }
   }, [currentPage, pages.length, user, saveProgress]);
 
-  const totalPages = pages.length + 3; // Cover + Contents + Story pages + End
+  const totalPages = Math.ceil(pages.length / 2) + 3; // Cover + Contents + Story spreads + End
   const author = book.authors.map(a => a.name).join(', ') || 'Unknown Author';
   const coverUrl = getBookCoverUrl(book);
 
@@ -169,7 +255,7 @@ export default function BookReader({ book, content, liked = false, likeCount = 0
               </div>
               <h1 className="text-3xl font-bold mb-2">{book.title}</h1>
               <p className="text-xl text-gray-600 mb-4">{author}</p>
-              <p className="text-sm text-gray-500">Project Gutenberg</p>
+              <p className="text-sm text-gray-500">{bookId.startsWith('gutendex-') ? '📚 Project Gutenberg' : '✍️ BXARCHI'}</p>
             </div>
           )}
 
@@ -205,16 +291,32 @@ export default function BookReader({ book, content, liked = false, likeCount = 0
           )}
 
           {/* Story Pages */}
-          {currentPage >= 2 && currentPage < totalPages - 1 && (
-            <div className="min-h-full">
-              <p className="text-base leading-relaxed text-gray-800 whitespace-pre-wrap font-serif">
-                {pages[currentPage - 2]}
-              </p>
-              <div className="text-center mt-6 text-sm text-gray-500">
-                Page {currentPage - 1} of {totalPages - 2}
-              </div>
-            </div>
-          )}
+          {currentPage >= 2 && currentPage < totalPages - 1 && (() => {
+                const pageIndex = currentPage - 2;
+                const page = pages[pageIndex];
+                if (!page) return null;
+                
+                let pageLabel = `Page ${currentPage - 1}`;
+                
+                if (page.type === 'intro') {
+                  pageLabel = `Intro ${page.number}`;
+                } else if (page.type === 'cover' || page.type === 'end') {
+                  pageLabel = page.type.charAt(0).toUpperCase() + page.type.slice(1);
+                } else {
+                  pageLabel = `Page ${page.number}`;
+                }
+                
+                return (
+                  <div className="min-h-full">
+                    <p className="text-base leading-relaxed text-gray-800 whitespace-pre-wrap font-serif">
+                      {page.content}
+                    </p>
+                    <div className="text-center mt-6 text-sm text-gray-500">
+                      {pageLabel} of {totalPages - 2}
+                    </div>
+                  </div>
+                );
+              })()}
 
           {/* End Page */}
           {currentPage === totalPages - 1 && (
@@ -385,20 +487,26 @@ export default function BookReader({ book, content, liked = false, likeCount = 0
                     <p className="text-sm mb-2"><strong>Downloads:</strong> {book.download_count.toLocaleString()}</p>
                   </div>
                   <div className="absolute bottom-8 left-0 right-0 text-center text-xs">
-                    <p>Project Gutenberg</p>
+                    <p>{bookId.startsWith('gutendex-') ? '📚 Project Gutenberg' : '✍️ BXARCHI'}</p>
                   </div>
                 </>
               )}
-              {currentPage >= 2 && currentPage < totalPages - 1 && (
-                <>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {pages[currentPage - 2]}
-                  </p>
-                  <div className="absolute bottom-8 left-0 right-0 text-center text-xs text-gray-600">
-                    {currentPage - 1}
-                  </div>
-                </>
-              )}
+              {currentPage >= 2 && currentPage < totalPages - 1 && (() => {
+                const pageIndex = Math.floor((currentPage - 2) * 2);
+                const page = pages[pageIndex];
+                if (!page) return null;
+                
+                return (
+                  <>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                      {page.content}
+                    </p>
+                    <div className="absolute bottom-8 left-0 right-0 text-center text-xs text-gray-600">
+                      {page.number}
+                    </div>
+                  </>
+                );
+              })()}
               {currentPage === totalPages - 1 && (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <h1 className="text-5xl font-bold mb-6">The End</h1>
@@ -434,16 +542,22 @@ export default function BookReader({ book, content, liked = false, likeCount = 0
                   </ul>
                 </div>
               )}
-              {currentPage >= 2 && currentPage < totalPages - 2 && pages[currentPage - 1] && (
-                <>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {pages[currentPage - 1]}
-                  </p>
-                  <div className="absolute bottom-8 left-0 right-0 text-center text-xs text-gray-600">
-                    {currentPage}
-                  </div>
-                </>
-              )}
+              {currentPage >= 2 && currentPage < totalPages - 2 && (() => {
+                const pageIndex = Math.floor((currentPage - 2) * 2) + 1;
+                const page = pages[pageIndex];
+                if (!page) return null;
+                
+                return (
+                  <>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                      {page.content}
+                    </p>
+                    <div className="absolute bottom-8 left-0 right-0 text-center text-xs text-gray-600">
+                      {page.number}
+                    </div>
+                  </>
+                );
+              })()}
               {(currentPage === totalPages - 2 || currentPage >= totalPages - 1) && (
                 <div className="flex items-center justify-center h-full text-center text-gray-400">
                   <p className="text-sm">End of book</p>

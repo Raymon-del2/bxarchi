@@ -8,7 +8,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
-import { toggleBookLike, checkUserLiked } from '@/lib/firebase/books';
+import { checkUserThumb, toggleBookThumb, getThumbCounts } from '@/lib/firebase/books';
 import Loader from '@/components/ui/Loader';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +24,9 @@ interface Book {
   published: boolean;
   views?: number;
   likes?: number;
+  dislikes?: number;
   isLiked?: boolean;
+  isDisliked?: boolean;
 }
 
 interface ReadProgress {
@@ -41,8 +43,13 @@ export default function ReadingListPage() {
   const [likedBooks, setLikedBooks] = useState<Book[]>([]);
   const [readBooks, setReadBooks] = useState<(Book & { progress?: ReadProgress })[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const likedScrollRef = useRef<HTMLDivElement>(null);
   const readScrollRef = useRef<HTMLDivElement>(null);
+
+  const refreshData = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -54,28 +61,60 @@ export default function ReadingListPage() {
     const fetchReadingData = async () => {
       if (!user) return;
 
+      setLoading(true);
       try {
-        // Get all book likes by this user
-        const likesRef = collection(db, 'bookLikes');
-        const likesQuery = query(likesRef, where('userId', '==', user.uid));
-        const likesSnapshot = await getDocs(likesQuery);
+        // Get all book thumbs (likes) by this user
+        const thumbsRef = collection(db, 'bookThumbs');
+        const thumbsQuery = query(thumbsRef, where('userId', '==', user.uid), where('thumbType', '==', 'like'));
+        const thumbsSnapshot = await getDocs(thumbsQuery);
 
         // Get book IDs
-        const likedBookIds = likesSnapshot.docs.map(doc => doc.data().bookId);
+        const likedBookIds = thumbsSnapshot.docs.map(doc => doc.data().bookId);
 
         // Fetch liked book details
         const likedBooksData: Book[] = [];
         for (const bookId of likedBookIds) {
+          // Try to get from BXARCHI books first
           const bookRef = doc(db, 'books', bookId);
           const bookSnap = await getDoc(bookRef);
+          
           if (bookSnap.exists()) {
             const bookData = bookSnap.data();
-            const { liked } = await checkUserLiked(bookId, user.uid);
+            const { liked, disliked } = await checkUserThumb(bookId, user.uid);
+            const { likeCount, dislikeCount } = await getThumbCounts(bookId);
             likedBooksData.push({
               id: bookSnap.id,
               ...bookData,
-              isLiked: liked
+              likes: likeCount,
+              dislikes: dislikeCount,
+              isLiked: liked,
+              isDisliked: disliked
             } as Book);
+          } else {
+            // Try to get from cached Gutendex books
+            const cachedBookRef = doc(db, 'cachedGutendexBooks', bookId);
+            const cachedBookSnap = await getDoc(cachedBookRef);
+            
+            if (cachedBookSnap.exists()) {
+              const cachedBookData = cachedBookSnap.data();
+              const { liked, disliked } = await checkUserThumb(bookId, user.uid);
+              const { likeCount, dislikeCount } = await getThumbCounts(bookId);
+              likedBooksData.push({
+                id: cachedBookSnap.id,
+                title: cachedBookData.title,
+                description: cachedBookData.description,
+                genre: cachedBookData.genre,
+                coverImage: cachedBookData.coverImage,
+                authorName: cachedBookData.authorName,
+                authorId: 'gutendex',
+                published: true,
+                views: 0,
+                likes: likeCount,
+                dislikes: dislikeCount,
+                isLiked: liked,
+                isDisliked: disliked
+              } as Book);
+            }
           }
         }
         setLikedBooks(likedBooksData);
@@ -85,8 +124,7 @@ export default function ReadingListPage() {
         const progressQuery = query(progressRef, where('userId', '==', user.uid));
         const progressSnapshot = await getDocs(progressQuery);
         
-        console.log('Progress docs found:', progressSnapshot.docs.length);
-
+        
         // Fetch books with progress
         const readBooksData: (Book & { progress?: ReadProgress })[] = [];
         for (const progressDoc of progressSnapshot.docs) {
@@ -108,11 +146,15 @@ export default function ReadingListPage() {
           
           if (bookSnap && bookSnap.exists()) {
             const bookData = bookSnap.data();
-            const { liked } = await checkUserLiked(progressData.bookId, user.uid);
+            const { liked, disliked } = await checkUserThumb(progressData.bookId, user.uid);
+            const { likeCount, dislikeCount } = await getThumbCounts(progressData.bookId);
             readBooksData.push({
               id: bookSnap.id,
               ...bookData,
+              likes: likeCount,
+              dislikes: dislikeCount,
               isLiked: liked,
+              isDisliked: disliked,
               progress: {
                 bookId: progressData.bookId,
                 currentPage: progressData.currentPage || 0,
@@ -134,7 +176,7 @@ export default function ReadingListPage() {
     if (user) {
       fetchReadingData();
     }
-  }, [user]);
+  }, [user, refreshKey]);
 
   const scroll = (ref: React.RefObject<HTMLDivElement>, direction: 'left' | 'right') => {
     if (ref.current) {
@@ -150,33 +192,55 @@ export default function ReadingListPage() {
     return <Loader />;
   }
 
-  const BookCard = ({ book, progress }: { book: Book; progress?: ReadProgress }) => {
+  const BookCard = ({ book, progress, onLikeChange }: { book: Book; progress?: ReadProgress; onLikeChange?: () => void }) => {
     const [liked, setLiked] = useState(book.isLiked || false);
     const [likeCount, setLikeCount] = useState(book.likes || 0);
-    const [liking, setLiking] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     const handleLike = async (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       
-      if (!user || liking) return;
+      if (!user || loading) return;
       
-      setLiking(true);
-      const { liked: newLikedState } = await toggleBookLike(book.id, user.uid);
+      setLoading(true);
+      const result = await toggleBookThumb(book.id, user.uid, 'like');
       
-      setLiked(newLikedState);
-      setLikeCount(prev => newLikedState ? prev + 1 : Math.max(0, prev - 1));
-      setLiking(false);
+      if (!result.error) {
+        setLiked(result.liked);
+        
+        // Update like count
+        if (result.liked) {
+          setLikeCount(prev => prev + 1);
+        } else {
+          setLikeCount(prev => Math.max(0, prev - 1));
+        }
+        
+        // Refresh data when unliked to remove from liked section
+        if (!result.liked && onLikeChange) {
+          onLikeChange();
+        }
+      }
+      
+      setLoading(false);
     };
 
     return (
       <div className="flex-shrink-0 w-64 bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-lg transition-all hover:scale-105 relative">
-        <Link href={`/books/${book.id}`}>
+        <Link href={book.authorId === 'gutendex' ? `/books/gutendex/${book.id.replace('gutendex-', '')}` : `/books/${book.id}`}>
           <div className="relative h-80">
+            {book.authorId === 'gutendex' && (
+              <div className="absolute top-2 right-2 z-10">
+                <span className="inline-flex items-center px-2 py-1 text-xs font-bold bg-purple-500 text-white rounded-full shadow-lg">
+                  📚 GUTENDEX
+                </span>
+              </div>
+            )}
             <Image
               src={book.coverImage}
               alt={book.title}
               fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
               className="object-cover"
             />
           </div>
@@ -222,13 +286,15 @@ export default function ReadingListPage() {
                         <span className="font-semibold">Completed</span>
                       </div>
                     ) : (
-                      <Link
-                        href={`/books/${book.id}/read`}
-                        className="inline-block text-xs font-semibold text-indigo-600 hover:text-indigo-700"
-                        onClick={(e) => e.stopPropagation()}
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/books/${book.id}/read`);
+                        }}
+                        className="inline-block text-xs font-semibold text-indigo-600 hover:text-indigo-700 cursor-pointer"
                       >
                         Continue Reading →
-                      </Link>
+                      </div>
                     )}
                   </>
                 )}
@@ -236,19 +302,21 @@ export default function ReadingListPage() {
             )}
           </div>
         </Link>
-        {/* Like Button - Bottom Right */}
-        <button
-          onClick={handleLike}
-          disabled={liking}
-          className={`absolute bottom-3 right-3 flex items-center space-x-1 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full shadow-md transition-colors z-10 ${
-            liking ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50'
-          }`}
-        >
-          <svg className={`w-4 h-4 ${liked ? 'text-red-500' : 'text-gray-400'}`} fill={liked ? 'currentColor' : 'none'} stroke={liked ? 'none' : 'currentColor'} strokeWidth={2} viewBox="0 0 24 24">
-            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-          </svg>
-          <span className="text-xs font-semibold text-gray-700">{likeCount}</span>
-        </button>
+        {/* Heart Like Button - Bottom Right */}
+        <div className="absolute bottom-3 right-3 z-10">
+          <button
+            onClick={handleLike}
+            disabled={loading}
+            className="flex items-center gap-1 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full shadow-lg hover:bg-white transition-all group"
+          >
+            <span className={`text-lg transition-transform ${liked ? 'scale-110 text-red-500' : 'scale-100 text-gray-400 group-hover:text-red-400'}`}>
+              {liked ? '❤️' : '🤍'}
+            </span>
+            <span className={`text-xs font-medium transition-colors ${liked ? 'text-red-500' : 'text-gray-600 group-hover:text-red-400'}`}>
+              {likeCount}
+            </span>
+          </button>
+        </div>
       </div>
     );
   };
@@ -300,10 +368,10 @@ export default function ReadingListPage() {
             </div>
           ) : (
             <div className="relative md:px-20">
-              {/* Left Arrow - Purple Vertical Bar Style */}
+              {/* Left Arrow - Grey Vertical Bar Style */}
               <button
                 onClick={() => scroll(likedScrollRef, 'left')}
-                className="hidden md:flex absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 items-center justify-center z-10 transition-all shadow-lg"
+                className="hidden md:flex absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 items-center justify-center z-10 transition-all shadow-lg"
               >
                 <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
@@ -317,14 +385,14 @@ export default function ReadingListPage() {
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
                 {likedBooks.map((book) => (
-                  <BookCard key={book.id} book={book} />
+                  <BookCard key={book.id} book={book} onLikeChange={refreshData} />
                 ))}
               </div>
 
-              {/* Right Arrow - Purple Vertical Bar Style */}
+              {/* Right Arrow - Grey Vertical Bar Style */}
               <button
                 onClick={() => scroll(likedScrollRef, 'right')}
-                className="hidden md:flex absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 items-center justify-center z-10 transition-all shadow-lg"
+                className="hidden md:flex absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 items-center justify-center z-10 transition-all shadow-lg"
               >
                 <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
@@ -359,10 +427,10 @@ export default function ReadingListPage() {
             </div>
           ) : (
             <div className="relative md:px-20">
-              {/* Left Arrow - Purple Vertical Bar Style */}
+              {/* Left Arrow - Grey Vertical Bar Style */}
               <button
                 onClick={() => scroll(readScrollRef, 'left')}
-                className="hidden md:flex absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 items-center justify-center z-10 transition-all shadow-lg"
+                className="hidden md:flex absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 items-center justify-center z-10 transition-all shadow-lg"
               >
                 <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
@@ -376,14 +444,14 @@ export default function ReadingListPage() {
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
                 {readBooks.map((book) => (
-                  <BookCard key={book.id} book={book} progress={book.progress} />
+                  <BookCard key={book.id} book={book} progress={book.progress} onLikeChange={refreshData} />
                 ))}
               </div>
 
-              {/* Right Arrow - Purple Vertical Bar Style */}
+              {/* Right Arrow - Grey Vertical Bar Style */}
               <button
                 onClick={() => scroll(readScrollRef, 'right')}
-                className="hidden md:flex absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 items-center justify-center z-10 transition-all shadow-lg"
+                className="hidden md:flex absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 items-center justify-center z-10 transition-all shadow-lg"
               >
                 <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />

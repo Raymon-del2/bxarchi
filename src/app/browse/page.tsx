@@ -2,16 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getPublishedBooks } from '@/lib/firebase/books';
-import type { Book } from '@/lib/firebase/books';
-import { getPopularGutendexBooks, searchGutendexBooks, getBookCoverUrl, extractGenreFromSubjects, type GutendexBook } from '@/lib/api/gutendex';
+import { useAuth } from '@/contexts/AuthContext';
+import { getPublishedBooks, type Book } from '@/lib/firebase/books';
+import { searchGutendexBooks, getPopularGutendexBooks, getBookCoverUrl, extractGenreFromSubjects, type GutendexBook } from '@/lib/api/gutendex';
 import { generateBookPlaceholder } from '@/lib/utils/placeholderGenerator';
-import Navbar from '@/components/layout/Navbar';
-import Loader from '@/components/ui/Loader';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
+import { cleanupIncorrectCache, validateCacheIntegrity } from '@/lib/cleanup-cache';
+import { getSafeImageUrl, createImageErrorHandler, createImageLoadHandler, getImageStyles } from '@/lib/image-utils';
+import Navbar from '@/components/layout/Navbar';
+import Loader from '@/components/ui/Loader';
+import SearchPopup from '@/components/ui/SearchPopup';
+import BookDebugInfo from '@/components/debug/BookDebugInfo';
 
-// Convert Gutendex book to our format
+// Convert external books to our format
 interface ExternalBook {
   id: string;
   title: string;
@@ -21,6 +25,7 @@ interface ExternalBook {
   genre: string;
   isExternal: true;
   downloadCount: number;
+  source: 'gutendex';
 }
 
 type CombinedBook = (Book & { isExternal?: false }) | ExternalBook;
@@ -34,7 +39,8 @@ function convertGutendexBook(book: GutendexBook): ExternalBook {
     description: book.subjects.slice(0, 2).join(', ') || 'Classic literature from Project Gutenberg',
     genre: extractGenreFromSubjects(book.subjects),
     isExternal: true,
-    downloadCount: book.download_count
+    downloadCount: book.download_count,
+    source: 'gutendex'
   };
 }
 
@@ -46,6 +52,7 @@ export default function BrowseBooksPage() {
   const [selectedGenre, setSelectedGenre] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [loadingExternal, setLoadingExternal] = useState(false);
+  const [showSearchPopup, setShowSearchPopup] = useState(false);
 
   useEffect(() => {
     fetchBooks();
@@ -75,81 +82,143 @@ export default function BrowseBooksPage() {
   const fetchBooks = async () => {
     setLoading(true);
     
+    console.log('🚀 Starting fetchBooks process...');
+    
+    // Clean up any incorrectly cached BXARCHI books
+    console.log('🧹 Running cache cleanup...');
+    const cleanupCount = await cleanupIncorrectCache();
+    console.log(`✅ Cleanup complete. Removed ${cleanupCount} incorrectly cached books`);
+    
+    // Validate cache integrity
+    console.log('🔍 Validating cache integrity...');
+    const { validBooks, invalidBooks } = await validateCacheIntegrity();
+    console.log(`📊 Cache validation: ${validBooks.length} valid, ${invalidBooks.length} invalid`);
+    
     // Fetch local BXARCHI books
+    console.log('📚 Fetching BXARCHI books...');
     const { books: fetchedBooks, error: fetchError } = await getPublishedBooks();
+    console.log(`✅ Fetched ${fetchedBooks.length} BXARCHI books`);
     
     if (fetchError) {
+      console.error('❌ Error fetching BXARCHI books:', fetchError);
       setError(fetchError);
     }
     
-    // Fetch cached Gutendex books from Firestore
+    // Fetch cached Gutendex books from Firestore with enhanced validation
+    console.log('📖 Fetching cached Gutendex books...');
     let cachedGutendexBooks: ExternalBook[] = [];
+    let rejectedBooks = 0;
+    
     try {
       const cachedBooksRef = collection(db, 'cachedGutendexBooks');
       const cachedBooksSnap = await getDocs(cachedBooksRef);
+      
+      console.log(`🔍 Processing ${cachedBooksSnap.docs.length} cached books...`);
+      
       cachedGutendexBooks = cachedBooksSnap.docs.map(doc => {
         const data = doc.data();
+        const bookId = data.id;
+        
+        console.log(`📖 Processing cached book: ${bookId}`);
+        
+        // Enhanced validation to ensure this is actually a Gutendex book
+        const isValidGutendexBook = 
+          bookId.startsWith('gutendex-') &&
+          /^\d+$/.test(bookId.replace('gutendex-', '')) && // Numeric ID
+          data.author && !data.authorName && // Gutendex uses 'author', not 'authorName'
+          data.coverUrl && !data.coverImage && // Gutendex uses 'coverUrl', not 'coverImage'
+          typeof data.download_count === 'number' && // Gutendex has download_count
+          !data.authorName && // No BXARCHI fields
+          !data.coverImage; // No BXARCHI fields
+        
+        if (!isValidGutendexBook) {
+          console.log(`❌ Rejecting invalid cached book: ${bookId}`, {
+            hasGutendexPrefix: bookId.startsWith('gutendex-'),
+            hasNumericId: /^\d+$/.test(bookId.replace('gutendex-', '')),
+            hasCorrectAuthor: data.author && !data.authorName,
+            hasCorrectCover: data.coverUrl && !data.coverImage,
+            hasDownloadCount: typeof data.download_count === 'number'
+          });
+          rejectedBooks++;
+          return null;
+        }
+        
+        console.log(`✅ Valid cached Gutendex book: ${bookId}`);
+        
         return {
           id: data.id,
           title: data.title,
-          author: data.authorName,
-          coverUrl: data.coverImage,
+          author: data.author, // Use 'author' not 'authorName'
+          coverUrl: data.coverUrl, // Use 'coverUrl' not 'coverImage'
           description: data.description,
           genre: data.genre,
           isExternal: true,
-          downloadCount: 0
+          downloadCount: data.download_count || 0,
+          source: 'gutendex' as const
         } as ExternalBook;
-      });
+      }).filter((book): book is ExternalBook => book !== null);
+      
+      console.log(`✅ Accepted ${cachedGutendexBooks.length} valid cached Gutendex books`);
+      console.log(`❌ Rejected ${rejectedBooks} invalid cached books`);
+      
     } catch (error) {
-      console.error('Error fetching cached Gutendex books:', error);
+      console.error('💥 Error fetching cached Gutendex books:', error);
     }
     
     // Fetch fresh external books from Gutendex API
+    console.log('🌐 Fetching fresh Gutendex books from API...');
     setLoadingExternal(true);
     let freshExternalBooks: ExternalBook[] = [];
     try {
-      console.log('Fetching Gutendex books...');
       const gutendexResponse = await getPopularGutendexBooks(1);
-      console.log('Gutendex response:', gutendexResponse);
       freshExternalBooks = gutendexResponse?.results.map(convertGutendexBook) || [];
-      console.log('Fresh Gutendex books:', freshExternalBooks.length);
+      console.log(`✅ Fetched ${freshExternalBooks.length} fresh Gutendex books`);
     } catch (error) {
-      console.error('Error fetching Gutendex books:', error);
+      console.error('💥 Error fetching Gutendex books:', error);
     }
     setLoadingExternal(false);
     
-    // Combine all books (BXARCHI + cached Gutendex + fresh Gutendex)
-    // Remove duplicates by keeping cached versions
+    // Combine all books with deduplication
+    console.log('🔄 Combining and deduplicating books...');
     const cachedIds = new Set(cachedGutendexBooks.map(b => b.id));
     const uniqueFreshBooks = freshExternalBooks.filter(b => !cachedIds.has(b.id));
     
-    console.log('Total books:', {
+    const allBooks = [...fetchedBooks, ...cachedGutendexBooks, ...uniqueFreshBooks];
+    
+    console.log('📊 Final book counts:', {
       bxarchi: fetchedBooks.length,
-      cached: cachedGutendexBooks.length,
-      fresh: uniqueFreshBooks.length,
-      total: fetchedBooks.length + cachedGutendexBooks.length + uniqueFreshBooks.length
+      cachedGutendex: cachedGutendexBooks.length,
+      freshGutendex: uniqueFreshBooks.length,
+      total: allBooks.length
     });
     
-    setBooks([...fetchedBooks, ...cachedGutendexBooks, ...uniqueFreshBooks]);
+    // Log sample of books for debugging
+    console.log('📖 Sample books:', allBooks.slice(0, 3).map(book => ({
+      id: book.id,
+      title: book.title,
+      isExternal: (book as any).isExternal,
+      source: (book as any).source
+    })));
+    
+    setBooks(allBooks);
     setLoading(false);
+    
+    console.log('🎉 fetchBooks complete!');
   };
 
   const genres = [
     'all',
     'fiction',
-    'non-fiction',
-    'mystery',
-    'romance',
-    'sci-fi',
-    'fantasy',
-    'thriller',
-    'biography',
-    'self-help',
-    'poetry',
-    'literature',
+    'science',
     'history',
     'philosophy',
+    'poetry',
     'drama',
+    'biography',
+    'self-help',
+    'fantasy',
+    'thriller',
+    'literature',
     'other',
   ];
 
@@ -195,13 +264,24 @@ export default function BrowseBooksPage() {
         <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
           {/* Search Bar */}
           <div className="mb-6">
-            <input
-              type="text"
-              placeholder="Search by title or author..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900 bg-white"
-            />
+            <div className="flex gap-3">
+              <input
+                type="text"
+                placeholder="Search by title or author..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900 bg-white"
+              />
+              <button
+                onClick={() => setShowSearchPopup(true)}
+                className="px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors font-medium flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                Advanced Search
+              </button>
+            </div>
           </div>
 
           {/* Genre Filter */}
@@ -274,15 +354,25 @@ export default function BrowseBooksPage() {
               const author = isExternal ? (book as ExternalBook).author : (book as Book).authorName;
               const originalCover = isExternal ? (book as ExternalBook).coverUrl : (book as Book).coverImage;
               
-              // Generate placeholder if no cover image
-              const coverImage = originalCover || generateBookPlaceholder(book.title, author);
+              // Debug logging for BXARCHI books
+              if (!isExternal) {
+                console.log(`📚 BXARCHI Book "${book.title}":`, {
+                  id: book.id,
+                  hasCover: !!originalCover,
+                  coverUrl: originalCover,
+                  author: author
+                });
+              }
+              
+              // Generate safe image URL with fallback
+              const placeholderUrl = generateBookPlaceholder(book.title, author);
+              const coverImage = getSafeImageUrl(originalCover || '', placeholderUrl);
               
               return (
               <div
                 key={book.id}
                 onClick={() => {
                   if (isExternal) {
-                    // Extract Gutendex ID and navigate to details page
                     const gutendexId = book.id.replace('gutendex-', '');
                     router.push(`/books/gutendex/${gutendexId}`);
                   } else {
@@ -293,22 +383,28 @@ export default function BrowseBooksPage() {
               >
                 {/* Book Cover */}
                 <div className="relative h-64 bg-gray-200">
-                  {isExternal && (
+                  {isExternal ? (
                     <div className="absolute top-2 right-2 z-10">
                       <span className="inline-flex items-center px-2 py-1 text-xs font-bold bg-purple-500 text-white rounded-full shadow-lg">
                         📚 GUTENDEX
                       </span>
                     </div>
+                  ) : (
+                    <div className="absolute top-2 right-2 z-10">
+                      <span className="inline-flex items-center px-2 py-1 text-xs font-bold bg-indigo-500 text-white rounded-full shadow-lg">
+                        ✍️ BXARCHI
+                      </span>
+                    </div>
                   )}
+                  
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={coverImage}
                     alt={book.title}
                     className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = generateBookPlaceholder(book.title, author);
-                    }}
+                    onError={createImageErrorHandler(placeholderUrl)}
+                    onLoad={createImageLoadHandler()}
+                    style={getImageStyles()}
                   />
                 </div>
 
@@ -351,10 +447,24 @@ export default function BrowseBooksPage() {
                 </div>
               </div>
               );
-            })}
-          </div>
-        )}
-      </div>
+      })}
     </div>
+  )}
+
+    {/* Search Popup */}
+    <SearchPopup
+      isOpen={showSearchPopup}
+      onClose={() => setShowSearchPopup(false)}
+      onSelectBook={(selectedBook) => {
+        // Handle book selection from search popup
+        const gutendexId = selectedBook.id.replace('gutendex-', '');
+        router.push(`/books/gutendex/${gutendexId}`);
+      }}
+    />
+    
+    {/* Debug Component */}
+    <BookDebugInfo />
+    </div>
+  </div>
   );
 }

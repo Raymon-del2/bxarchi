@@ -27,6 +27,7 @@ function WritePageContent() {
   const [genreSearch, setGenreSearch] = useState('');
   const [showGenreDropdown, setShowGenreDropdown] = useState(false);
   const [coverImage, setCoverImage] = useState('');
+  const [backCoverImage, setBackCoverImage] = useState('');
 
   // Comprehensive genre list
   const allGenres = [
@@ -140,6 +141,7 @@ function WritePageContent() {
     }
     
     setCoverImage(book.coverImage || '');
+    setBackCoverImage(book.backCoverImage || '');
     setLoadingBook(false);
   }, [editId, user]);
 
@@ -202,6 +204,54 @@ function WritePageContent() {
     reader.readAsDataURL(file);
   };
 
+  const handleBackCoverImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Image size should be less than 2MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      // Compress and convert to base64
+      const img = document.createElement('img');
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set max dimensions
+        const maxWidth = 400;
+        const maxHeight = 600;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+        setBackCoverImage(compressedBase64);
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = async (e: React.FormEvent, publish: boolean) => {
     e.preventDefault();
     setError('');
@@ -242,6 +292,7 @@ function WritePageContent() {
       genre,
       content: finalContent,
       coverImage,
+      backCoverImage,
       authorId: user.uid,
       authorName: user.displayName || user.email || 'Anonymous',
       published: publish,
@@ -467,6 +518,30 @@ function WritePageContent() {
                 <Image
                   src={coverImage}
                   alt="Cover preview"
+                  fill
+                  className="object-cover rounded-md"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Back Cover Image */}
+          <div>
+            <label htmlFor="backCover" className="block text-sm font-medium text-gray-700 mb-2">
+              Back Cover Image
+            </label>
+            <input
+              type="file"
+              id="backCover"
+              accept="image/*"
+              onChange={handleBackCoverImageUpload}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+            {backCoverImage && (
+              <div className="mt-4 relative w-48 h-64">
+                <Image
+                  src={backCoverImage}
+                  alt="Back cover preview"
                   fill
                   className="object-cover rounded-md"
                 />

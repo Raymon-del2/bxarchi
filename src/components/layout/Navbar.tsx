@@ -32,10 +32,10 @@ export default function Navbar() {
     fetchUserProfile();
   }, [user]);
 
-  // Check if user has visited new books page
+  // Check if user has visited what's new page
   useEffect(() => {
-    const hasVisitedNewBooks = localStorage.getItem('hasVisitedNewBooks');
-    if (hasVisitedNewBooks === 'true') {
+    const hasVisitedWhatsNew = localStorage.getItem('hasVisitedWhatsNew');
+    if (hasVisitedWhatsNew === 'true') {
       setShowNewBadge(false);
     }
   }, []);
@@ -203,6 +203,20 @@ export default function Navbar() {
                       👥 Community
                     </Link>
                     <Link
+                      href="/whats-new"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      onClick={() => setShowDropdown(false)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>🎉 What&apos;s New</span>
+                        {showNewBadge && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 text-xs font-medium bg-red-500 text-white rounded-full">
+                            NEW
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+                    <Link
                       href="/resources"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                       onClick={() => setShowDropdown(false)}
@@ -210,13 +224,22 @@ export default function Navbar() {
                       📚 Writer Resources
                     </Link>
                     {isAdmin && (
-                      <Link
-                        href="/chat-rooms"
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors border-l-4 border-red-500"
-                        onClick={() => setShowDropdown(false)}
-                      >
-                        🛡️ Chat Rooms (Admin)
-                      </Link>
+                      <>
+                        <Link
+                          href="/admin/users"
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors border-l-4 border-red-500"
+                          onClick={() => setShowDropdown(false)}
+                        >
+                          👥 Users List (Admin)
+                        </Link>
+                        <Link
+                          href="/chat-rooms"
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors border-l-4 border-red-500"
+                          onClick={() => setShowDropdown(false)}
+                        >
+                          🛡️ Chat Rooms (Admin)
+                        </Link>
+                      </>
                     )}
                     <Link
                       href="/settings"

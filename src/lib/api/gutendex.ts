@@ -75,6 +75,33 @@ export async function searchGutendexBooks(
   }
 }
 
+async function fetchWithRetry(url: string, maxRetries: number = 3): Promise<Response> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      const response = await fetch(url, { 
+        signal: controller.signal,
+        cache: 'no-store',
+        headers: {
+          'User-Agent': 'BXARCHI-App/1.0',
+          'Accept': 'application/json',
+        }
+      });
+      clearTimeout(timeoutId);
+
+      return response;
+    } catch (error) {
+      console.warn(`Attempt ${i + 1} failed:`, error);
+      if (i === maxRetries - 1) throw error;
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
 export async function getPopularGutendexBooks(
   page: number = 1
 ): Promise<GutendexResponse | null> {
@@ -83,16 +110,12 @@ export async function getPopularGutendexBooks(
   if (cached) return cached;
 
   try {
+    console.log('🌐 Fetching popular Gutendex books...');
+    
     // Sort by download count to get most popular
     const url = `${GUTENDEX_BASE_URL}/books/?page=${page}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased to 15 seconds
-
-    const response = await fetch(url, { 
-      signal: controller.signal,
-      cache: 'no-store' // Prevent caching issues
-    });
-    clearTimeout(timeoutId);
+    
+    const response = await fetchWithRetry(url);
 
     if (!response.ok) {
       console.error('Gutendex API response not OK:', response.status);
@@ -103,10 +126,17 @@ export async function getPopularGutendexBooks(
     // Sort by download count
     data.results.sort((a, b) => b.download_count - a.download_count);
     setCache(cacheKey, data);
+    console.log(`✅ Fetched ${data.results.length} popular books from Gutendex`);
     return data;
   } catch (error) {
-    console.error('Error fetching popular books from Gutendex:', error);
-    return null;
+    console.error('💥 Error fetching popular books from Gutendex:', error);
+    // Return empty response instead of null to prevent breaking the app
+    return {
+      count: 0,
+      next: null,
+      previous: null,
+      results: []
+    };
   }
 }
 
@@ -136,7 +166,29 @@ export async function getGutendexBookById(id: number): Promise<GutendexBook | nu
 
 export function getBookCoverUrl(book: GutendexBook): string {
   // Gutendex provides cover images in formats
-  return book.formats['image/jpeg'] || '/placeholder-book.png';
+  const coverUrl = book.formats['image/jpeg'];
+  
+  console.log(`📖 Getting cover URL for book "${book.title}":`, {
+    hasCover: !!coverUrl,
+    coverUrl,
+    formats: book.formats
+  });
+  
+  // If no cover image, return placeholder
+  if (!coverUrl) {
+    console.log(`❌ No cover image for "${book.title}", using placeholder`);
+    return '/placeholder-book.png';
+  }
+  
+  // Validate the URL format
+  try {
+    const url = new URL(coverUrl);
+    console.log(`✅ Valid cover URL for "${book.title}": ${coverUrl}`);
+    return coverUrl;
+  } catch (error) {
+    console.error(`❌ Invalid cover URL for "${book.title}": ${coverUrl}`, error);
+    return '/placeholder-book.png';
+  }
 }
 
 export function getBookReadUrl(book: GutendexBook): string | null {
@@ -156,12 +208,17 @@ export function getBookDownloadUrl(book: GutendexBook, format: 'epub' | 'text' |
 export function extractGenreFromSubjects(subjects: string[]): string {
   // Extract genre from subjects
   const genreKeywords = {
-    fiction: ['fiction', 'novel', 'romance', 'adventure', 'mystery', 'thriller'],
-    science: ['science', 'physics', 'chemistry', 'biology'],
-    history: ['history', 'historical', 'war'],
-    philosophy: ['philosophy', 'ethics', 'logic'],
-    poetry: ['poetry', 'poems', 'verse'],
-    drama: ['drama', 'plays', 'theater']
+    fiction: ['fiction', 'novel', 'romance', 'adventure', 'mystery', 'thriller', 'fantasy', 'science fiction', 'speculative'],
+    science: ['science', 'physics', 'chemistry', 'biology', 'mathematics', 'technology', 'engineering'],
+    history: ['history', 'historical', 'war', 'ancient', 'medieval', 'modern'],
+    philosophy: ['philosophy', 'ethics', 'logic', 'metaphysics', 'epistemology'],
+    poetry: ['poetry', 'poems', 'verse', 'epic', 'lyric'],
+    drama: ['drama', 'plays', 'theater', 'theatre', 'tragedy', 'comedy'],
+    biography: ['biography', 'autobiography', 'memoir', 'life', 'personal'],
+    'self-help': ['self help', 'self-improvement', 'personal development', 'motivation'],
+    fantasy: ['fantasy', 'magic', 'mythology', 'dragons', 'wizards'],
+    thriller: ['thriller', 'suspense', 'crime', 'detective', 'mystery'],
+    other: ['other', 'miscellaneous', 'general']
   };
 
   for (const subject of subjects) {

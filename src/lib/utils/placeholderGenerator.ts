@@ -39,53 +39,69 @@ export function generateBookPlaceholder(title: string, author?: string): string 
   const hash = hashString(title);
   const palette = COLOR_PALETTES[hash % COLOR_PALETTES.length];
   
-  // Get first letter of title
-  const firstLetter = title.charAt(0).toUpperCase();
-  
   // Truncate title and author for display
-  const displayTitle = title.length > 30 ? title.substring(0, 27) + '...' : title;
-  const displayAuthor = author && author.length > 25 ? author.substring(0, 22) + '...' : author;
+  const displayTitle = title.length > 40 ? title.substring(0, 37) + '...' : title;
+  const displayAuthor = author && author.length > 30 ? author.substring(0, 27) + '...' : author || 'Unknown Author';
   
-  // Create SVG
+  // Create a more book-like cover without large letters
   const svg = `
     <svg width="400" height="600" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="grad${hash}" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" style="stop-color:${palette.bg};stop-opacity:1" />
-          <stop offset="100%" style="stop-color:${adjustBrightness(palette.bg, -20)};stop-opacity:1" />
+          <stop offset="100%" style="stop-color:${adjustBrightness(palette.bg, -30)};stop-opacity:1" />
         </linearGradient>
+        <filter id="shadow">
+          <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+        </filter>
       </defs>
       
       <!-- Background -->
       <rect width="400" height="600" fill="url(#grad${hash})"/>
       
-      <!-- Decorative elements -->
-      <circle cx="50" cy="50" r="30" fill="${palette.text}" opacity="0.1"/>
-      <circle cx="350" cy="550" r="40" fill="${palette.text}" opacity="0.1"/>
+      <!-- Book spine effect -->
+      <rect x="0" y="0" width="20" height="600" fill="${adjustBrightness(palette.bg, -50)}" opacity="0.5"/>
       
-      <!-- Large letter -->
-      <text x="200" y="250" font-family="Arial, sans-serif" font-size="180" font-weight="bold" 
-            fill="${palette.text}" text-anchor="middle" opacity="0.3">
-        ${firstLetter}
-      </text>
+      <!-- Decorative border -->
+      <rect x="20" y="20" width="360" height="560" fill="none" stroke="${palette.text}" stroke-width="2" opacity="0.2"/>
+      <rect x="30" y="30" width="340" height="540" fill="none" stroke="${palette.text}" stroke-width="1" opacity="0.1"/>
+      
+      <!-- Book icon at top -->
+      <g transform="translate(200, 80)" filter="url(#shadow)">
+        <rect x="-25" y="-30" width="50" height="60" fill="${palette.text}" opacity="0.2" rx="3"/>
+        <rect x="-20" y="-25" width="40" height="50" fill="${palette.text}" opacity="0.3" rx="2"/>
+        <line x1="-15" y1="-15" x2="15" y2="-15" stroke="${palette.bg}" stroke-width="2"/>
+        <line x1="-15" y1="-5" x2="15" y2="-5" stroke="${palette.bg}" stroke-width="2"/>
+        <line x1="-15" y1="5" x2="5" y2="5" stroke="${palette.bg}" stroke-width="2"/>
+      </g>
       
       <!-- Title -->
-      <text x="200" y="400" font-family="Arial, sans-serif" font-size="28" font-weight="bold" 
-            fill="${palette.text}" text-anchor="middle">
+      <text x="200" y="200" font-family="Georgia, serif" font-size="32" font-weight="bold" 
+            fill="${palette.text}" text-anchor="middle" filter="url(#shadow)">
         ${escapeXml(displayTitle)}
       </text>
       
       <!-- Author -->
-      ${displayAuthor ? `
-      <text x="200" y="440" font-family="Arial, sans-serif" font-size="20" 
+      <text x="200" y="240" font-family="Georgia, serif" font-size="18" 
             fill="${palette.text}" text-anchor="middle" opacity="0.9">
         ${escapeXml(displayAuthor)}
       </text>
-      ` : ''}
       
-      <!-- Book icon -->
-      <path d="M 180 480 L 180 520 L 220 520 L 220 480 Z M 185 485 L 185 515 M 195 485 L 195 515 M 205 485 L 205 515 M 215 485 L 215 515" 
-            stroke="${palette.text}" stroke-width="2" fill="none" opacity="0.5"/>
+      <!-- Decorative line -->
+      <line x1="100" y1="260" x2="300" y2="260" stroke="${palette.text}" stroke-width="1" opacity="0.3"/>
+      
+      <!-- Genre indicator -->
+      <rect x="150" y="500" width="100" height="30" fill="${palette.text}" opacity="0.1" rx="15"/>
+      <text x="200" y="520" font-family="Arial, sans-serif" font-size="14" font-weight="bold"
+            fill="${palette.text}" text-anchor="middle" opacity="0.7">
+        CLASSIC
+      </text>
+      
+      <!-- Corner decorations -->
+      <path d="M 30 30 L 50 30 L 30 50 Z" fill="${palette.text}" opacity="0.1"/>
+      <path d="M 370 30 L 370 50 L 350 30 Z" fill="${palette.text}" opacity="0.1"/>
+      <path d="M 30 570 L 30 550 L 50 570 Z" fill="${palette.text}" opacity="0.1"/>
+      <path d="M 370 570 L 350 570 L 370 550 Z" fill="${palette.text}" opacity="0.1"/>
     </svg>
   `;
   

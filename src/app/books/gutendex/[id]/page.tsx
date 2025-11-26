@@ -7,10 +7,11 @@ import Navbar from '@/components/layout/Navbar';
 import Link from 'next/link';
 import Image from 'next/image';
 import Loader from '@/components/ui/Loader';
-import BookLikeButton from '@/components/ui/BookLikeButton';
 import CommentSection from '@/components/comments/CommentSection';
 import { getGutendexBookById, getBookCoverUrl, extractGenreFromSubjects, type GutendexBook } from '@/lib/api/gutendex';
-import { toggleBookLike, checkUserLiked } from '@/lib/firebase/books';
+import { toggleBookThumb, checkUserThumb, getThumbCounts } from '@/lib/firebase/books';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,11 +27,22 @@ export default function GutendexBookPage() {
   const [error, setError] = useState('');
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
-  const [liking, setLiking] = useState(false);
+  const [thumbLoading, setThumbLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const fetchBook = async () => {
       try {
+        // First check if this might be a BXARCHI book
+        const bxarchiBookRef = doc(db, 'books', gutendexId);
+        const bxarchiBookSnap = await getDoc(bxarchiBookRef);
+        
+        if (bxarchiBookSnap.exists()) {
+          // This is actually a BXARCHI book! Redirect to the correct page
+          router.push(`/books/${gutendexId}`);
+          return;
+        }
+        
         const bookData = await getGutendexBookById(parseInt(gutendexId));
         if (!bookData) {
           setError('Book not found');
@@ -39,10 +51,16 @@ export default function GutendexBookPage() {
         setBook(bookData);
         // Don't set likeCount from download_count, it starts at 0
 
-        // Check if user liked this book
+        // Check if user liked this book and get counts
         if (user) {
-          const { liked: userLiked } = await checkUserLiked(bookId, user.uid);
+          const { liked: userLiked } = await checkUserThumb(bookId, user.uid);
+          const { likeCount: userLikeCount } = await getThumbCounts(bookId);
           setLiked(userLiked);
+          setLikeCount(userLikeCount);
+        } else {
+          // Get counts even if user is not logged in
+          const { likeCount: userLikeCount } = await getThumbCounts(bookId);
+          setLikeCount(userLikeCount);
         }
       } catch (err) {
         setError('Failed to load book');
@@ -52,22 +70,43 @@ export default function GutendexBookPage() {
     };
 
     fetchBook();
-  }, [bookId, gutendexId, user]);
+  }, [bookId, gutendexId, user, router, refreshKey]);
 
-  const handleLike = async () => {
+  // Refresh like status when page becomes visible (user navigates back)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user && bookId) {
+        setRefreshKey(prev => prev + 1);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user, bookId]);
+
+  const handleThumb = async () => {
     if (!user) {
       router.push('/login');
       return;
     }
 
-    if (liking) return;
+    if (thumbLoading) return;
     
-    setLiking(true);
-    const { liked: newLikedState } = await toggleBookLike(bookId, user.uid);
+    setThumbLoading(true);
+    const result = await toggleBookThumb(bookId, user.uid, 'like');
     
-    setLiked(newLikedState);
-    setLikeCount(prev => newLikedState ? prev + 1 : Math.max(0, prev - 1));
-    setLiking(false);
+    if (!result.error) {
+      setLiked(result.liked);
+      
+      // Update like count
+      if (result.liked) {
+        setLikeCount(prev => prev + 1);
+      } else {
+        setLikeCount(prev => prev - 1);
+      }
+    }
+    
+    setThumbLoading(false);
   };
 
   if (loading) {
@@ -147,14 +186,32 @@ export default function GutendexBookPage() {
                     {book.download_count.toLocaleString()} downloads
                   </div>
                   
-                  {/* Like Button */}
-                  <div className={liking ? 'opacity-50 pointer-events-none' : ''}>
-                    <BookLikeButton
-                      liked={liked}
-                      count={likeCount}
-                      onToggle={handleLike}
-                      disabled={liking}
-                    />
+                  {/* Heart Like Button */}
+                  <div className={thumbLoading ? 'opacity-50 pointer-events-none' : ''}>
+                    <button
+                      onClick={handleThumb}
+                      disabled={thumbLoading}
+                      className={`flex items-center space-x-2 px-4 py-2 rounded-full transition-all ${
+                        liked 
+                          ? 'bg-red-500 text-white' 
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <svg 
+                        className="w-5 h-5" 
+                        fill={liked ? "currentColor" : "none"} 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round" 
+                          strokeWidth={2} 
+                          d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
+                        />
+                      </svg>
+                      <span className="font-medium">{likeCount}</span>
+                    </button>
                   </div>
                 </div>
               </div>

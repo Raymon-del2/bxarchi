@@ -3,13 +3,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { getBook, incrementBookViews, toggleBookLike, checkUserLiked } from '@/lib/firebase/books';
+import { getBook, incrementBookViews, toggleBookThumb, checkUserThumb, getThumbCounts } from '@/lib/firebase/books';
 import type { Book } from '@/lib/firebase/books';
 import Image from 'next/image';
 import Navbar from '@/components/layout/Navbar';
 import CommentSection from '@/components/comments/CommentSection';
 import Loader from '@/components/ui/Loader';
-import BookLikeButton from '@/components/ui/BookLikeButton';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 
@@ -24,8 +23,9 @@ export default function BookPage() {
   const [error, setError] = useState('');
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
-  const [liking, setLiking] = useState(false);
+  const [thumbLoading, setThumbLoading] = useState(false);
   const [displayAuthorName, setDisplayAuthorName] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchBook = useCallback(async () => {
     setLoading(true);
@@ -65,7 +65,7 @@ export default function BookPage() {
       
       // Check if user liked this book
       if (user) {
-        const { liked: userLiked } = await checkUserLiked(bookId, user.uid);
+        const { liked: userLiked } = await checkUserThumb(bookId, user.uid);
         setLiked(userLiked);
       }
     }
@@ -79,20 +79,41 @@ export default function BookPage() {
     }
   }, [bookId, fetchBook]);
 
-  const handleLike = async () => {
+  // Refresh like status when page becomes visible (user navigates back)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user && bookId) {
+        setRefreshKey(prev => prev + 1);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user, bookId]);
+
+  const handleThumb = async () => {
     if (!user) {
       router.push('/login');
       return;
     }
     
-    if (liking) return;
+    if (thumbLoading) return;
     
-    setLiking(true);
-    const { liked: newLikedState } = await toggleBookLike(bookId, user.uid);
+    setThumbLoading(true);
+    const result = await toggleBookThumb(bookId, user.uid, 'like');
     
-    setLiked(newLikedState);
-    setLikeCount(prev => newLikedState ? prev + 1 : Math.max(0, prev - 1));
-    setLiking(false);
+    if (!result.error) {
+      setLiked(result.liked);
+      
+      // Update like count
+      if (result.liked) {
+        setLikeCount(prev => prev + 1);
+      } else {
+        setLikeCount(prev => prev - 1);
+      }
+    }
+    
+    setThumbLoading(false);
   };
 
   if (loading) {
@@ -190,14 +211,32 @@ export default function BookPage() {
                   {book.views || 0} views
                 </div>
                 
-                {/* Like Button */}
-                <div className={liking ? 'opacity-50 pointer-events-none' : ''}>
-                  <BookLikeButton
-                    liked={liked}
-                    count={likeCount}
-                    onToggle={handleLike}
-                    disabled={liking}
-                  />
+                {/* Heart Like Button */}
+                <div className={thumbLoading ? 'opacity-50 pointer-events-none' : ''}>
+                  <button
+                    onClick={handleThumb}
+                    disabled={thumbLoading}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-full transition-all ${
+                      liked 
+                        ? 'bg-red-500 text-white' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    <svg 
+                      className="w-5 h-5" 
+                      fill={liked ? "currentColor" : "none"} 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth={2} 
+                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
+                      />
+                    </svg>
+                    <span className="font-medium">{likeCount}</span>
+                  </button>
                 </div>
               </div>
 
