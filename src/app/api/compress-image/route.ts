@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       .jpeg({ quality: JPEG_QUALITY })
       .toBuffer();
 
-    return new NextResponse(outputBuffer, {
+    return new NextResponse(outputBuffer.buffer as ArrayBuffer, {
       status: 200,
       headers: {
         'Content-Type': 'image/jpeg',
