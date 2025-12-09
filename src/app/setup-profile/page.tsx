@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { createUserProfile, isNicknameAvailable, generateNicknameSuggestions, getUserProfile } from '@/lib/firebase/firestore';
 import { compressImageToBase64, validateImageFile } from '@/lib/utils/imageUtils';
+import { detectUserLocation } from '@/lib/utils/locationUtils';
 import { updateProfile } from 'firebase/auth';
 import Image from 'next/image';
 
@@ -22,6 +23,13 @@ export default function SetupProfilePage() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [originalNickname, setOriginalNickname] = useState('');
+  const [userLocation, setUserLocation] = useState<{
+    country: string;
+    city: string;
+    address?: string;
+    countryCode: string;
+  } | null>(null);
+  const [detectingLocation, setDetectingLocation] = useState(false);
 
   // Load existing profile data
   useEffect(() => {
@@ -46,6 +54,27 @@ export default function SetupProfilePage() {
     };
 
     loadProfile();
+  }, [user]);
+
+  // Detect user location
+  useEffect(() => {
+    const detectLocation = async () => {
+      if (user) {
+        setDetectingLocation(true);
+        try {
+          const location = await detectUserLocation();
+          if (location) {
+            setUserLocation(location);
+          }
+        } catch (error) {
+          console.error('Failed to detect location:', error);
+        } finally {
+          setDetectingLocation(false);
+        }
+      }
+    };
+
+    detectLocation();
   }, [user]);
 
   useEffect(() => {
@@ -156,6 +185,9 @@ export default function SetupProfilePage() {
         nickname: nickname,
         bio: bio,
         photoURL: photoURL,
+        country: userLocation?.country || '',
+        city: userLocation?.city || '',
+        address: userLocation?.address || '',
       });
 
       if (firestoreError) {

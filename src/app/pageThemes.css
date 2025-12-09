@@ -1,0 +1,45 @@
+/* BXARCHI Page Themes */
+
+/* Helper: every themed page container should be position:relative */
+
+/* 1. Vintage Old Paper */
+.bx-vintage-paper{
+  background:#E8DCC3 url('/textures/paper-grain.svg') repeat;
+  color:#2c261b;
+}
+.bx-vintage-paper::before{content:"";position:absolute;inset:0;box-shadow:inset 0 0 22px 2px rgba(108,78,44,.35);pointer-events:none;}
+
+/* 2. Torn Page */
+.bx-torn-paper{background:#F4F4EF url('/textures/crumple.svg') repeat;position:relative;box-shadow:0 4px 8px rgba(0,0,0,.25);}
+.bx-torn-paper::before{content:"";position:absolute;inset:0;-webkit-mask:url('/masks/torn-edge.svg') top/100% 100% no-repeat;mask:url('/masks/torn-edge.svg') top/100% 100% no-repeat;background:inherit;pointer-events:none;}
+
+/* 3. Neon Cyber */
+.bx-neon-dark{background:#0A0A0A;color:#00ffff;border:2px solid rgba(0,255,255,.4);box-shadow:0 0 40px rgba(0,255,255,.7);position:relative;overflow:hidden;}
+.bx-neon-dark::after{content:"";position:absolute;inset:0;background:url('/textures/digital-noise.svg') repeat;opacity:.2;mix-blend-mode:soft-light;pointer-events:none;}
+
+/* 4. Stone Grey */
+.bx-stone-grey{background:#B4B4B4 url('/textures/stone.svg') repeat;color:#222;position:relative;}
+.bx-stone-grey::before{content:"";position:absolute;inset:0;box-shadow:inset -2px -2px 15px rgba(0,0,0,.35);pointer-events:none;mix-blend-mode:multiply;}
+
+/* 5. Scroll Gold */
+.bx-scroll-gold{background:linear-gradient(#FFF3D5,#F2D8A1);color:#5b3812;position:relative;}
+.bx-scroll-gold::after{content:"";position:absolute;inset:0;box-shadow:0 0 45px rgba(255,225,150,.65);pointer-events:none;}
+
+/* 6. Horror Dark */
+.bx-horror-dark{background:#1A0000 url('/textures/scratches.svg') repeat;color:#f5bebe;position:relative;}
+.bx-horror-dark::before{content:"";position:absolute;inset:0;box-shadow:0 0 60px rgba(255,0,0,.35),0 0 45px rgba(0,0,0,.7) inset;pointer-events:none;}
+
+/* 7. Pure White */
+.bx-pure-white{background:#ffffff;color:#111;border:1px solid rgba(0,0,0,.05);box-shadow:0 2px 5px rgba(0,0,0,.08);} 
+
+/* 8. Comic Cream */
+.bx-comic-cream{background:#FFF6E4;color:#111;position:relative;border:3px solid #000;}
+.bx-comic-cream::after{content:"";position:absolute;inset:0;background:url('/textures/halftone.svg') repeat;opacity:.2;pointer-events:none;mix-blend-mode:overlay;}
+
+/* 9. Space Gradient */
+.bx-space-gradient{background:linear-gradient(90deg,#0D0F2D,#4B42FF);color:#e2e8f0;position:relative;}
+.bx-space-gradient::after{content:"";position:absolute;inset:0;background:url('/textures/stars.svg') repeat;opacity:.35;pointer-events:none;mix-blend-mode:screen;}
+
+/* 10. Water Pastel */
+.bx-water-pastel{background:#E1F1FF;color:#083148;position:relative;}
+.bx-water-pastel::after{content:"";position:absolute;inset:0;background:url('/textures/watercolor.svg') repeat;opacity:.2;pointer-events:none;}

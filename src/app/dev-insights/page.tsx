@@ -557,8 +557,8 @@ export default function DevInsightsPage() {
                         <div
                           className={`rounded-lg px-3 py-2 shadow-sm ${
                             isCurrentUser
-                              ? 'bg-[#dcf8c6] text-gray-900'
-                              : 'bg-white text-gray-900'
+                              ? 'bg-[#dcf8c6] text-black'
+                              : 'bg-black text-white'
                           }`}
                         >
                           <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">

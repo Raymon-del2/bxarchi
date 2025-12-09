@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { createBook, updateBook, getBook } from '@/lib/firebase/books';
+import { uploadBookCover } from '@/lib/firebase/storage';
 import Navbar from '@/components/layout/Navbar';
 import Image from 'next/image';
 import Loader from '@/components/ui/Loader';
@@ -19,7 +20,8 @@ function WritePageContent() {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [genre, setGenre] = useState('fiction');
+  const [genre, setGenre] = useState('Other');
+  const [themeId] = useState<string>('');
   const [content, setContent] = useState('');
   const [pages, setPages] = useState<string[]>(['']);
   const [currentPage, setCurrentPage] = useState(0);
@@ -28,6 +30,8 @@ function WritePageContent() {
   const [showGenreDropdown, setShowGenreDropdown] = useState(false);
   const [coverImage, setCoverImage] = useState('');
   const [backCoverImage, setBackCoverImage] = useState('');
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [backCoverFile, setBackCoverFile] = useState<File | null>(null);
 
   // Comprehensive genre list
   const allGenres = [
@@ -156,13 +160,26 @@ function WritePageContent() {
     }
   }, [user, isEditMode, editId, router, loadBookForEdit]);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const compressImageFile = async (file: File): Promise<File | null> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch('/api/compress-image', { method: 'POST', body: fd });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), { type: 'image/jpeg' });
+    } catch {
+      return null;
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    let file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      setError('Image size should be less than 2MB');
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image size should be less than 5MB');
       return;
     }
 
@@ -198,19 +215,20 @@ function WritePageContent() {
 
         const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
         setCoverImage(compressedBase64);
+        setCoverFile(file);
       };
       img.src = reader.result as string;
     };
     reader.readAsDataURL(file);
   };
 
-  const handleBackCoverImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleBackCoverImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    let file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      setError('Image size should be less than 2MB');
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image size should be less than 5MB');
       return;
     }
 
@@ -246,6 +264,7 @@ function WritePageContent() {
 
         const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
         setBackCoverImage(compressedBase64);
+        setBackCoverFile(file);
       };
       img.src = reader.result as string;
     };
@@ -291,8 +310,9 @@ function WritePageContent() {
       description: description.trim(),
       genre,
       content: finalContent,
-      coverImage,
-      backCoverImage,
+      coverImage: coverFile ? '' : coverImage,
+      themeId: themeId || undefined,
+      backCoverImage: backCoverFile ? '' : backCoverImage,
       authorId: user.uid,
       authorName: user.displayName || user.email || 'Anonymous',
       published: publish,
@@ -306,6 +326,16 @@ function WritePageContent() {
         if (updateError) {
           setError(updateError);
         } else {
+          // Upload new covers if provided and patch URLs
+          if (coverFile) {
+            const { url: coverUrl, error: coverErr } = await uploadBookCover(editId, coverFile);
+            if (!coverErr && coverUrl) await updateBook(editId, { coverImage: coverUrl });
+          }
+          if (backCoverFile) {
+            const { url: backUrl, error: backErr } = await uploadBookCover(`${editId}-back`, backCoverFile);
+            if (!backErr && backUrl) await updateBook(editId, { backCoverImage: backUrl });
+          }
+
           setSuccess(publish ? 'Book updated and published!' : 'Book updated as draft!');
           setTimeout(() => {
             router.push(`/books/${editId}`);
@@ -315,9 +345,19 @@ function WritePageContent() {
         // Create new book
         const { bookId, error: createError } = await createBook(bookData);
         
-        if (createError) {
-          setError(createError);
+        if (createError || !bookId) {
+          setError(createError || 'Failed to create book');
         } else {
+          // Upload covers if provided
+          if (coverFile) {
+            const { url: coverUrl, error: coverErr } = await uploadBookCover(bookId, coverFile);
+            if (!coverErr && coverUrl) await updateBook(bookId, { coverImage: coverUrl });
+          }
+          if (backCoverFile) {
+            const { url: backUrl, error: backErr } = await uploadBookCover(`${bookId}-back`, backCoverFile);
+            if (!backErr && backUrl) await updateBook(bookId, { backCoverImage: backUrl });
+          }
+
           setSuccess(publish ? 'Book published successfully!' : 'Book saved as draft!');
           setTimeout(() => {
             router.push(`/books/${bookId}`);

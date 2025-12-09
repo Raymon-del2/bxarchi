@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { logOut } from '@/lib/firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
+import { useUnread } from '@/contexts/UnreadContext';
 import { getUserProfile, UserProfile } from '@/lib/firebase/firestore';
 
 // Admin user IDs
@@ -15,8 +16,14 @@ export default function Navbar() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [showDropdown, setShowDropdown] = useState(false);
+  const { hasUnreadDev, markDevRead } = useUnread();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [showNewBadge, setShowNewBadge] = useState(true);
+  const handleVisitNewBooks = () => {
+    localStorage.setItem('hasVisitedWhatsNew','true');
+    setShowNewBadge(false);
+    setShowDropdown(false);
+  }
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -78,7 +85,7 @@ export default function Navbar() {
               <Link href="/browse" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium">
                 Browse Books
               </Link>
-              <Link href="/new-books" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium relative">
+              <Link href="/new-books" onClick={handleVisitNewBooks} className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium relative">
                 New Books
                 {showNewBadge && (
                   <span className="absolute -top-1 -right-2 bg-green-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
@@ -112,7 +119,7 @@ export default function Navbar() {
                   className="flex items-center space-x-2 text-gray-700 hover:text-indigo-600"
                 >
                   {photoURL ? (
-                    <div className="h-8 w-8 rounded-full overflow-hidden border-2 border-indigo-600">
+                    <div className="h-8 w-8 rounded-full overflow-hidden border-2 border-indigo-600 relative">
                       <Image
                         src={photoURL}
                         alt="Profile"
@@ -148,7 +155,7 @@ export default function Navbar() {
                       <Link
                         href="/new-books"
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors relative"
-                        onClick={() => setShowDropdown(false)}
+                        onClick={handleVisitNewBooks}
                       >
                         ✨ New Books
                         {showNewBadge && (
@@ -190,10 +197,10 @@ export default function Navbar() {
                     </Link>
                     <Link
                       href="/dev-insights"
+                      onClick={() => { setShowDropdown(false); markDevRead(); }}
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-                      onClick={() => setShowDropdown(false)}
                     >
-                      💡 Dev Insights
+                      💡 Dev Insights {hasUnreadDev && <span className="inline-block h-2 w-2 bg-red-500 rounded-full ml-1"/>}
                     </Link>
                     <Link
                       href="/community"
@@ -202,10 +209,10 @@ export default function Navbar() {
                     >
                       👥 Community
                     </Link>
-                    <Link
-                      href="/whats-new"
+                    <Link 
+                      href="/whats-new" 
+                      onClick={()=>{localStorage.setItem('hasVisitedWhatsNew','true');setShowNewBadge(false);setShowDropdown(false);}}
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-                      onClick={() => setShowDropdown(false)}
                     >
                       <div className="flex items-center justify-between">
                         <span>🎉 What&apos;s New</span>
@@ -231,6 +238,13 @@ export default function Navbar() {
                           onClick={() => setShowDropdown(false)}
                         >
                           👥 Users List (Admin)
+                        </Link>
+                        <Link
+                          href="/admin/update-locations"
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors border-l-4 border-red-500"
+                          onClick={() => setShowDropdown(false)}
+                        >
+                          🌍 Update Locations (Admin)
                         </Link>
                         <Link
                           href="/chat-rooms"

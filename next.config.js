@@ -3,16 +3,12 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   images: {
-    domains: ['localhost', 'lh3.googleusercontent.com', 'covers.openlibrary.org'],
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'www.gutenberg.org',
-      },
-      {
-        protocol: 'http',
-        hostname: 'www.gutenberg.org',
-      },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
+      { protocol: 'https', hostname: 'covers.openlibrary.org' },
+      { protocol: 'https', hostname: 'firebasestorage.googleapis.com' },
+      { protocol: 'https', hostname: 'www.gutenberg.org' },
+      { protocol: 'http',  hostname: 'www.gutenberg.org' },
     ],
     // Allow Base64 images
     dangerouslyAllowSVG: true,

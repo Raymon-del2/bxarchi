@@ -8,6 +8,9 @@ export interface UserProfile {
   nickname?: string;
   bio?: string;
   photoURL?: string;
+  country?: string;
+  city?: string;
+  address?: string;
   createdAt?: any;
   updatedAt?: any;
 }

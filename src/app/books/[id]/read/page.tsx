@@ -7,6 +7,7 @@ import { getBook, toggleBookLike, checkUserLiked } from '@/lib/firebase/books';
 import type { Book } from '@/lib/firebase/books';
 import type { GutendexBook } from '@/lib/api/gutendex';
 import Loader from '@/components/ui/Loader';
+import { PAGE_STYLES } from '@/components/ui/PageStylePicker';
 import BookReader from '@/components/reader/BookReader';
 
 export const dynamic = 'force-dynamic';
@@ -130,8 +131,11 @@ function BXARCHIReaderContent() {
     download_count: 0
   };
 
+  const themeClass = PAGE_STYLES.find(s=>s.id===book.themeId)?.className || '';
+
   return (
-    <BookReader 
+    <div className={`${themeClass} min-h-screen`}>
+      <BookReader 
       book={gutendexCompatibleBook} 
       content={content}
       liked={liked}
@@ -139,6 +143,7 @@ function BXARCHIReaderContent() {
       onLike={handleLike}
       liking={liking}
     />
+    </div>
   );
 }
 

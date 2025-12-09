@@ -7,6 +7,7 @@ export interface Book {
   description: string;
   genre: string;
   content: string;
+  themeId?: string;
   coverImage?: string;
   backCoverImage?: string;
   authorId: string;
@@ -20,7 +21,7 @@ export interface Book {
 }
 
 // Create a new book
-export const createBook = async (bookData: Omit<Book, 'id' | 'createdAt' | 'updatedAt' | 'views' | 'likes'>) => {
+export const createBook = async (bookData: Omit<Book, 'id' | 'createdAt' | 'updatedAt' | 'views' | 'likes' | 'dislikes'>) => {
   try {
     const booksRef = collection(db, 'books');
     const docRef = await addDoc(booksRef, {
