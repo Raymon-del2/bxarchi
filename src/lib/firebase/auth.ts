@@ -8,7 +8,24 @@ import {
   User,
   sendPasswordResetEmail,
 } from 'firebase/auth';
-import { auth } from './config';
+import { auth, db } from './config';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+
+// Ensure a user document exists in Firestore `users/{uid}`
+async function ensureUserProfile(u: User) {
+  const profileRef = doc(db, 'users', u.uid);
+  const snap = await getDoc(profileRef);
+  if (!snap.exists()) {
+    await setDoc(profileRef, {
+      uid: u.uid,
+      email: u.email || '',
+      displayName: u.displayName || '',
+      photoURL: u.photoURL || '',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+}
 
 // Sign up with email and password
 export const signUpWithEmail = async (email: string, password: string, displayName: string) => {
@@ -23,6 +40,7 @@ export const signUpWithEmail = async (email: string, password: string, displayNa
       });
     }
     
+    await ensureUserProfile(userCredential.user);
     return { user: userCredential.user, error: null };
   } catch (error: any) {
     return { user: null, error: error.message };
@@ -34,6 +52,7 @@ export const signInWithEmail = async (email: string, password: string) => {
   const normalizedEmail = email.trim().toLowerCase();
   try {
     const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+    await ensureUserProfile(userCredential.user);
     return { user: userCredential.user, error: null };
   } catch (error: any) {
     let errorMessage = error.message;
@@ -70,6 +89,7 @@ export const signInWithGoogle = async () => {
   try {
     const provider = new GoogleAuthProvider();
     const userCredential = await signInWithPopup(auth, provider);
+    await ensureUserProfile(userCredential.user);
     return { user: userCredential.user, error: null };
   } catch (error: any) {
     return { user: null, error: error.message };
