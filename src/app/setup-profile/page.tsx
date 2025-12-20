@@ -105,12 +105,18 @@ export default function SetupProfilePage() {
       setNicknameAvailable(available);
       setCheckingNickname(false);
 
-      // Generate suggestions if nickname is taken
-      if (!available) {
+      if (available === false) {
+        // Nickname actually taken, fetch suggestions
         const newSuggestions = await generateNicknameSuggestions(nickname);
         setSuggestions(newSuggestions);
       } else {
         setSuggestions([]);
+        // If availability could not be determined, inform the user
+        if (available === null) {
+          setError('Unable to verify nickname availability right now. Please try again later.');
+        } else {
+          setError('');
+        }
       }
     };
 

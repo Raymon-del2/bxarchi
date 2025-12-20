@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import DictPopup from './DictPopup';
 import { GutendexBook, getBookCoverUrl } from '@/lib/api/gutendex';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -28,7 +30,15 @@ export default function BookReader({ book, content, liked = false, likeCount = 0
   const [currentPage, setCurrentPage] = useState(0);
   const [pages, setPages] = useState<BookPage[]>([]);
   const [isMobile, setIsMobile] = useState(false);
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
   const bookId = `gutendex-${book.id}`;
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
 
   useEffect(() => {
     // Check if mobile
@@ -129,7 +139,52 @@ export default function BookReader({ book, content, liked = false, likeCount = 0
     setPages(contentPages);
   }, [content]);
 
-  // Cache Gutendex book to Firestore (only for actual Gutendex books)
+  // selection listener
+  useEffect(() => {
+    const handleMouseUp = (e: MouseEvent) => {
+      // Don't handle right clicks
+      if (e.button === 2) return;
+      
+      const selection = window.getSelection();
+      const selectedText = selection?.toString().trim();
+      
+      // If no text is selected, clear the selection and return
+      if (!selectedText) {
+        setSelection(null);
+        return;
+      }
+      
+      // Check if the selection is within the book content
+      const selectedNode = selection?.anchorNode;
+      const isInBookContent = contentRef.current && 
+        selectedNode && 
+        contentRef.current.contains(selectedNode);
+      
+      if (isInBookContent) {
+        // Only set selection if it contains at least one word character
+        if (/\w/.test(selectedText)) {
+          setSelection(selection);
+          // Prevent default to avoid text selection UI
+          e.preventDefault();
+        } else {
+          setSelection(null);
+        }
+      } else {
+        setSelection(null);
+      }
+    };
+
+    // Add both mouseup and touchend for better mobile support
+    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('touchend', handleMouseUp as any);
+    
+    return () => {
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('touchend', handleMouseUp as any);
+    };
+  }, []);
+
+  // Cache Gutendex book to Firestore
   useEffect(() => {
     const cacheBook = async () => {
       if (!user) return;
@@ -165,6 +220,11 @@ export default function BookReader({ book, content, liked = false, likeCount = 0
       cacheBook();
     }
   }, [book, content, user, bookId]);
+
+  // Clear selection when page changes
+  useEffect(() => {
+    setSelection(null);
+  }, [currentPage]);
 
   // Save reading progress
   const saveProgress = useCallback(async (page: number, total: number) => {
@@ -236,7 +296,11 @@ export default function BookReader({ book, content, liked = false, likeCount = 0
   // Mobile view with pagination
   if (isMobile) {
     return (
-      <div className="min-h-screen bg-gray-100 relative">
+      <div 
+        className="min-h-screen bg-gray-100 relative" 
+        ref={contentRef}
+        onContextMenu={(e) => e.preventDefault()} // Disable context menu on long press
+      >
         {/* Back Button - Mobile */}
         <div className="sticky top-0 z-40 bg-white border-b border-gray-200 px-4 py-3">
           <Link href="/browse" className="flex items-center text-gray-600 hover:text-indigo-600">
@@ -307,7 +371,7 @@ export default function BookReader({ book, content, liked = false, likeCount = 0
                 }
                 
                 return (
-                  <div className="min-h-full">
+                  <div className="min-h-full" key={`page-${pageIndex}`}>
                     <p className="text-base leading-relaxed text-gray-800 whitespace-pre-wrap font-serif">
                       {page.content}
                     </p>
@@ -388,13 +452,37 @@ export default function BookReader({ book, content, liked = false, likeCount = 0
             </button>
           </div>
         </div>
+        
+        {mounted && selection && (
+          <div className="fixed z-50" style={{
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none'
+          }}>
+            <DictPopup 
+              selection={selection} 
+              onClose={() => {
+                // Clear the selection when closing the popup
+                if (window.getSelection) {
+                  window.getSelection()?.removeAllRanges();
+                }
+                setSelection(null);
+              }} 
+            />
+          </div>
+        )}
       </div>
     );
   }
 
   // Desktop view with book flip animation
   return (
-    <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center p-8">
+    <div 
+      className="min-h-screen bg-[#FAFAFA] flex items-center justify-center p-8" 
+      ref={contentRef}
+      onContextMenu={(e) => e.preventDefault()} // Disable context menu on long press
+    >
       {/* Back Button - Desktop */}
       <Link 
         href="/browse"

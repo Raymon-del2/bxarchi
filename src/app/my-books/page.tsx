@@ -9,6 +9,7 @@ import Image from 'next/image';
 import { collection, query, where, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import Loader from '@/components/ui/Loader';
+import { generateBookPlaceholder } from '@/lib/utils/placeholderGenerator';
 
 export const dynamic = 'force-dynamic';
 
@@ -218,12 +219,17 @@ export default function MyBooksPage() {
             {filteredBooks.map((book) => (
               <div key={book.id} className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow">
                 <div className="relative h-64">
+                  {(() => {
+                    const coverSrc = book.coverImage || generateBookPlaceholder(book.title, book.authorName);
+                    return (
                   <Image
-                    src={book.coverImage}
+                    src={coverSrc}
                     alt={book.title}
                     fill
                     className="object-cover"
                   />
+                    );
+                  })()}
                   {!book.published && (
                     <div className="absolute top-2 right-2 bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
                       DRAFT

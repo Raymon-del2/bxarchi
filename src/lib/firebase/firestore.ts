@@ -70,6 +70,11 @@ export const updateUserProfile = async (uid: string, data: Partial<UserProfile>)
 export const isNicknameAvailable = async (nickname: string, currentUserId?: string) => {
   try {
     const normalizedNickname = nickname.toLowerCase().trim();
+    // Reserved nicknames that cannot be used
+    const reservedNicknames = ['system', 'admin', 'administrator', 'moderator', 'root'];
+    if (reservedNicknames.includes(normalizedNickname)) {
+      return { available: false, error: null };
+    }
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('nickname', '==', normalizedNickname));
     const querySnapshot = await getDocs(q);
@@ -89,7 +94,9 @@ export const isNicknameAvailable = async (nickname: string, currentUserId?: stri
     
     return { available: false, error: null };
   } catch (error: any) {
-    return { available: false, error: error.message };
+    console.error('Failed to check nickname availability:', error);
+    // Return null availability so UI can show a proper error instead of marking the nickname as taken
+    return { available: null, error: error.message };
   }
 };
 

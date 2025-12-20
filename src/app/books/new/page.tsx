@@ -66,7 +66,7 @@ export default function NewBookPage() {
         genre: genre || 'Other',
         content: content.trim(),
         themeId: themeId || undefined,
-        coverImage: '', // placeholder – real URL added after upload
+        coverImage: coverImage ? undefined : '', // omit if real file will be uploaded later
         authorId: user.uid,
         authorName,
         published: false,
@@ -77,8 +77,16 @@ export default function NewBookPage() {
       // 2) Upload cover to Firebase Storage and patch document
       if (coverImage) {
         const { url: coverUrl, error: uploadErr } = await uploadBookCover(bookId, coverImage);
-        if (!uploadErr && coverUrl) {
-          await updateBook(bookId, { coverImage: coverUrl });
+        if (uploadErr || !coverUrl) {
+          setError(uploadErr || 'Failed to upload cover image');
+          setSaving(false);
+          return;
+        }
+        const { error: patchErr } = await updateBook(bookId, { coverImage: coverUrl });
+        if (patchErr) {
+          setError(patchErr);
+          setSaving(false);
+          return;
         }
       }
 
@@ -108,7 +116,7 @@ export default function NewBookPage() {
         genre: genre || 'Other',
         content: content.trim(),
         themeId: themeId || undefined,
-        coverImage: '',
+        coverImage: coverImage ? undefined : '',
         authorId: user.uid,
         authorName,
         published: true,
@@ -119,8 +127,16 @@ export default function NewBookPage() {
       // 2) Upload cover if provided
       if (coverImage) {
         const { url: coverUrl, error: uploadErr } = await uploadBookCover(bookId, coverImage);
-        if (!uploadErr && coverUrl) {
-          await updateBook(bookId, { coverImage: coverUrl });
+        if (uploadErr || !coverUrl) {
+          setError(uploadErr || 'Failed to upload cover image');
+          setSaving(false);
+          return;
+        }
+        const { error: patchErr } = await updateBook(bookId, { coverImage: coverUrl });
+        if (patchErr) {
+          setError(patchErr);
+          setSaving(false);
+          return;
         }
       }
 

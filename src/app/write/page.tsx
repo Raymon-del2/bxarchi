@@ -310,9 +310,9 @@ function WritePageContent() {
       description: description.trim(),
       genre,
       content: finalContent,
-      coverImage: coverFile ? '' : coverImage,
+      coverImage,
       themeId: themeId || undefined,
-      backCoverImage: backCoverFile ? '' : backCoverImage,
+      backCoverImage,
       authorId: user.uid,
       authorName: user.displayName || user.email || 'Anonymous',
       published: publish,
@@ -329,11 +329,21 @@ function WritePageContent() {
           // Upload new covers if provided and patch URLs
           if (coverFile) {
             const { url: coverUrl, error: coverErr } = await uploadBookCover(editId, coverFile);
-            if (!coverErr && coverUrl) await updateBook(editId, { coverImage: coverUrl });
+            if (coverErr || !coverUrl) {
+              setError(coverErr || 'Failed to upload cover image');
+              setLoading(false);
+              return;
+            }
+            await updateBook(editId, { coverImage: coverUrl });
           }
           if (backCoverFile) {
             const { url: backUrl, error: backErr } = await uploadBookCover(`${editId}-back`, backCoverFile);
-            if (!backErr && backUrl) await updateBook(editId, { backCoverImage: backUrl });
+            if (backErr || !backUrl) {
+              setError(backErr || 'Failed to upload back cover image');
+              setLoading(false);
+              return;
+            }
+            await updateBook(editId, { backCoverImage: backUrl });
           }
 
           setSuccess(publish ? 'Book updated and published!' : 'Book updated as draft!');
@@ -351,11 +361,21 @@ function WritePageContent() {
           // Upload covers if provided
           if (coverFile) {
             const { url: coverUrl, error: coverErr } = await uploadBookCover(bookId, coverFile);
-            if (!coverErr && coverUrl) await updateBook(bookId, { coverImage: coverUrl });
+            if (coverErr || !coverUrl) {
+              setError(coverErr || 'Failed to upload cover image');
+              setLoading(false);
+              return;
+            }
+            await updateBook(bookId, { coverImage: coverUrl });
           }
           if (backCoverFile) {
             const { url: backUrl, error: backErr } = await uploadBookCover(`${bookId}-back`, backCoverFile);
-            if (!backErr && backUrl) await updateBook(bookId, { backCoverImage: backUrl });
+            if (backErr || !backUrl) {
+              setError(backErr || 'Failed to upload back cover image');
+              setLoading(false);
+              return;
+            }
+            await updateBook(bookId, { backCoverImage: backUrl });
           }
 
           setSuccess(publish ? 'Book published successfully!' : 'Book saved as draft!');

@@ -24,8 +24,13 @@ export interface Book {
 export const createBook = async (bookData: Omit<Book, 'id' | 'createdAt' | 'updatedAt' | 'views' | 'likes' | 'dislikes'>) => {
   try {
     const booksRef = collection(db, 'books');
+    // Remove undefined properties (e.g. themeId may be undefined)
+    const cleanedData: any = {};
+    Object.entries(bookData).forEach(([key, value]) => {
+      if (value !== undefined) cleanedData[key] = value;
+    });
     const docRef = await addDoc(booksRef, {
-      ...bookData,
+      ...cleanedData,
       views: 0,
       likes: 0,
       dislikes: 0,
@@ -95,8 +100,11 @@ export const getPublishedBooks = async () => {
 export const updateBook = async (bookId: string, bookData: Partial<Book>) => {
   try {
     const bookRef = doc(db, 'books', bookId);
+    // Remove undefined props to avoid Firestore errors
+    const cleaned: any = {};
+    Object.entries(bookData).forEach(([k,v])=>{ if(v!==undefined) cleaned[k]=v; });
     await updateDoc(bookRef, {
-      ...bookData,
+      ...cleaned,
       updatedAt: serverTimestamp(),
     });
     
