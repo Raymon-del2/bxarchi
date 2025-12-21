@@ -1,0 +1,25 @@
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+
+const serviceAccount = {
+  type: "service_account",
+  project_id: "bxarchi-10a7d",
+  private_key_id: "743f8dcd242cfa636d87a7ca6ef427021b0759ce",
+  private_key: "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDDYMTH8pYhGK/y\neyVoxG0HsNVEOnRwe3+irKOasZmARz9fKepob0IT+IoZgx+uCfFjLHDaSvyZ2Zgq\ncVEEn0iJi1EndNOPQQgu/RCh0sBz/aiQcYsAsWe5WC2Y2S0PMjLPhqSBfSUhQxUy\nKKSFgRpf5QXPqXrqX8KyJ/EpwyUPfcNtbcVzqh/x8fm4mXCjxdQx3hOaML5kDHID\nAdUJBXCtrGXargzSWd9R+l4JaFzjv4Co+EjkNhaHZ8pnZBdlKegWljA8vsxqd0gE\nlDm+Gae8dlYJeIEX04DGH5aXRbcb6uG3juYEqqUfnnuPXcyMlmpBsLIOKoo8uQZQ\nspPsX71HAgMBAAECggEARG1a3hB3RiYoUUuSAYxyBzSGrPuwFkkanbXLIv26njPV\n3RWIFIWK5gWxEFhdOw4ebbZ92+ZRa+zKn2rKjkzfEdUqWiBPjCehnxtgvNxcLQOV\nCunJXjfD9SUN6y982YqiQw6MBRH4dBrTjJqxbFSYESfcDiv0cauSO+VDUHYZP8AW\nF9GymcDLdpiAPiVfkB7VvVQrTqkUuoubhZreWBI6QsTsdb2B6n5FQ/dwd11drAAx\nPXSyzaYP5uMB3XByDMIUswrIyvmOHSNFJiPOUINdyFAAKJ0GaSBFVSf36nJR9e+M\nllwCkEpdLXt6lcsrhsG6X2ur6epDLqZuZ1VuRFxcWQKBgQDxkGCoUK9+Qu58bC+i\nBjIiVPxZTLviU/+hjwR9iK1co1JlF0vsqRHy8r9Jefc116ienoO4xAaqsZ9sCng7\nQm+YX6oYqrIB6/lvPRSYAwRSGmxOMmnQRTFkB/E5bM/eFIdvOQLNSRtf34QDRExc\nvnpwmEzzFYWNjzdt2dcH5DZfIwKBgQDPDc3nX4DQSeNCKCiQYAG2NfPShKNoqhg8\nAy546sXd76jrr/dFOTHMSuyOiMB/BRB6dB8mENnerjCTcoWLwIiHiPoJEvGknwVx\nzAb7dHb0lMfJTuhseWCmHMeHxxf3bgDsylw3d7RIaJI1zkneVZtjZIG+kwlgScdE\n6C0dcFY9jQKBgG5uGkHX4OJPpsaqjnv7aR/YyiPouFuXGt24i8z3lokrAJfGNqdS\nAyqVXm0wnJq4pBUfUgg9VO7jlIXHo38zt+Bom1H7drT6M2Vu/uMfPfJqsehtk4Hq\nn9Gi79vYqo5TxDZMUcOXEDSb8bWsm1wql76xYTwfMpasSiKl2294HIMRAoGBAK5+\nZLuMGePvkQ2NCHp73pVvrJcK3yfyyU+yIrUWrkBWnFZcSphVFimkLu4EQ64IV5XL\nTQDojKQEyr1Ic1GOpcELaCTDiVACEDWSC4RY53NB+4kk7e2U8SWs9V7xI7qLQ05L\nUCISyKWJM0cTHd+456aA6nLwOaOjKcNho7u+k391AoGBAMs3ciNpfFmj24x3o2Mb\naGs2FfABMopqg5bQcZO5dGOSloMFRG7oiePlE6cfetFl2agpTYmOZgUD3skf8uV0\nP6x5bDyKDdkt4U72IzBqwap1wvTuoU+zHlGyZTFAas/CA1GfveiKIUN6aqBf6nLL\n/z7SWCbIONuY3ttGfijcX1H4\n-----END PRIVATE KEY-----\n",
+  client_email: "firebase-adminsdk-fbsvc@bxarchi-10a7d.iam.gserviceaccount.com",
+  client_id: "116119227180058118550",
+  auth_uri: "https://accounts.google.com/o/oauth2/auth",
+  token_uri: "https://oauth2.googleapis.com/token",
+  auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+  client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40bxarchi-10a7d.iam.gserviceaccount.com",
+  universe_domain: "googleapis.com"
+};
+
+// Initialize Firebase Admin only once
+if (!getApps().length) {
+  initializeApp({
+    credential: cert(serviceAccount as any),
+  });
+}
+
+export const adminDb = getFirestore();
