@@ -544,6 +544,9 @@ function WritePageContent() {
           <div className="fixed inset-0 z-40" onClick={() => setShowBxPopup(false)}>
             <div className="absolute inset-0 bg-black/30" />
             <div className="absolute bottom-24 right-6 w-[400px] h-[500px] bg-neutral-900 text-white rounded-2xl shadow-xl z-50 flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-center">
+                <p className="text-xs text-white/90">✨ New feature coming soon: <span className="font-semibold">AI Writer for you: BXai.v2</span></p>
+              </div>
               <div className="px-4 py-3 border-b border-neutral-700 flex items-center justify-between">
                 <button className="text-gray-400 hover:text-white" onClick={() => setShowConversationList(!showConversationList)}>
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -573,7 +576,7 @@ function WritePageContent() {
                   <div className="flex flex-wrap gap-2">
                     {[
                       { label: '📚 Learn about BXARCHI', msg: 'Tell me about BXARCHI and what I can do here' },
-                      { label: '✍️ Help me write', msg: 'I want to write a story, can you help me get started?' },
+                      { label: '👨‍💻 Who is Raymond?', msg: 'Who is Raymond?' },
                       { label: '🧭 Navigate', msg: 'Please help me navigate the website' },
                       { label: '📖 Best books', msg: 'What are the best books on BXARCHI right now?' },
                     ].map((suggestion, idx) => (
