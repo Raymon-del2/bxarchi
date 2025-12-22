@@ -46,6 +46,19 @@ function WritePageContent() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [showConversationList, setShowConversationList] = useState(false);
   const [greetingIndex, setGreetingIndex] = useState(0);
+  const [aiMode, setAiMode] = useState<'chat' | 'generate'>('chat');
+  const [generatePrompt, setGeneratePrompt] = useState('');
+  const [generatePages, setGeneratePages] = useState(5);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateTitle, setGenerateTitle] = useState('');
+  const [generateGenre, setGenerateGenre] = useState('fantasy');
+  const [aiWriteEnabled, setAiWriteEnabled] = useState(false);
+  const [generatedPreview, setGeneratedPreview] = useState<{ title: string; description: string; genre: string; content: string } | null>(null);
+  const [generateWriteMode, setGenerateWriteMode] = useState<'single' | 'pages'>('single');
+  const [showAiReview, setShowAiReview] = useState(false);
+  const [aiReviewText, setAiReviewText] = useState('');
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [isContinuing, setIsContinuing] = useState(false);
 
   const userName = user?.displayName?.split(' ')[0] || 'Writer';
   const greetings = [
@@ -479,17 +492,92 @@ function WritePageContent() {
             </div>
           </div>
           {writeMode === 'single' && (
-            <div>
-              <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">Book Content *</label>
+            <div className="relative">
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="content" className="block text-sm font-medium text-gray-700">Book Content *</label>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!content.trim()) {
+                      alert('Write some content first!');
+                      return;
+                    }
+                    setShowAiReview(true);
+                    setIsReviewing(true);
+                    setAiReviewText('');
+                    try {
+                      const res = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          messages: [{ role: 'user', text: `Read this story and give brief feedback (2-3 sentences about what's good, 1-2 suggestions). Then ask if I want you to continue the story.\n\nStory:\n${content.substring(0, 3000)}` }],
+                          mode: 'chat'
+                        })
+                      });
+                      const data = await res.json();
+                      console.log('AI Review response:', data);
+                      if (res.ok && data.reply) {
+                        setAiReviewText(data.reply);
+                      } else {
+                        setAiReviewText(data.error || 'Sorry, I couldn\'t review your story right now. Please try again.');
+                      }
+                    } catch (err) {
+                      setAiReviewText('Error connecting to AI. Please try again.');
+                    } finally {
+                      setIsReviewing(false);
+                    }
+                  }}
+                  className="flex items-center gap-1 px-3 py-1 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm font-medium"
+                >
+                  <span>@</span> AI Review
+                </button>
+              </div>
               <textarea id="content" value={content} onChange={(e) => setContent(e.target.value)} placeholder="Write your book content here..." rows={20} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-gray-900 bg-white" required />
               <div className="mt-2 flex items-center justify-between text-sm text-gray-500"><span>{content.length} characters</span></div>
             </div>
           )}
           {writeMode === 'pages' && (
-            <div>
+            <div className="relative">
               <div className="flex items-center justify-between mb-4">
                 <label className="block text-sm font-medium text-gray-700">Book Content * (Page {currentPage + 1} of {pages.length})</label>
                 <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const allContent = pages.join('\n\n');
+                      if (!allContent.trim()) {
+                        alert('Write some content first!');
+                        return;
+                      }
+                      setShowAiReview(true);
+                      setIsReviewing(true);
+                      setAiReviewText('');
+                      try {
+                        const res = await fetch('/api/chat', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            messages: [{ role: 'user', text: `Read this story and give brief feedback (2-3 sentences about what's good, 1-2 suggestions). Then ask if I want you to continue the story.\n\nStory:\n${allContent.substring(0, 3000)}` }],
+                            mode: 'chat'
+                          })
+                        });
+                        const data = await res.json();
+                        console.log('AI Review response:', data);
+                        if (res.ok && data.reply) {
+                          setAiReviewText(data.reply);
+                        } else {
+                          setAiReviewText(data.error || 'Sorry, I couldn\'t review your story right now. Please try again.');
+                        }
+                      } catch (err) {
+                        setAiReviewText('Error connecting to AI. Please try again.');
+                      } finally {
+                        setIsReviewing(false);
+                      }
+                    }}
+                    className="flex items-center gap-1 px-3 py-1 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm font-medium"
+                  >
+                    <span>@</span> AI Review
+                  </button>
                   <button type="button" onClick={() => { const newPages = [...pages]; newPages.splice(currentPage + 1, 0, ''); setPages(newPages); setCurrentPage(currentPage + 1); }} className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium">+ Add Page</button>
                   {pages.length > 1 && (
                     <button type="button" onClick={() => { if (confirm('Delete this page?')) { const newPages = pages.filter((_, idx) => idx !== currentPage); setPages(newPages.length > 0 ? newPages : ['']); setCurrentPage(Math.max(0, currentPage - 1)); } }} className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium">🗑️ Delete Page</button>
@@ -531,6 +619,100 @@ function WritePageContent() {
         </form>
       </div>
 
+      {/* AI Review Modal */}
+      {showAiReview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => !isReviewing && !isContinuing && setShowAiReview(false)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative bg-white rounded-xl shadow-2xl w-[90%] max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <span className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-sm">@</span>
+                AI Review
+              </h3>
+              {!isReviewing && !isContinuing && (
+                <button onClick={() => setShowAiReview(false)} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              )}
+            </div>
+            
+            <div className="bg-gray-50 rounded-lg p-4 mb-4 max-h-60 overflow-y-auto">
+              {isReviewing ? (
+                <div className="flex items-center gap-3 text-gray-600">
+                  <div className="w-5 h-5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                  Reading your story...
+                </div>
+              ) : (
+                <p className="text-gray-700 whitespace-pre-wrap">{aiReviewText}</p>
+              )}
+            </div>
+            
+            {!isReviewing && (
+              <div className="flex gap-3">
+                <button
+                  onClick={async () => {
+                    setIsContinuing(true);
+                    try {
+                      const currentContent = writeMode === 'single' ? content : pages.join('\n\n');
+                      const res = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          messages: [{ role: 'user', text: `Continue this story naturally. Write the next part (about 500-1000 words). Match the style and tone. No introductions, just continue the narrative:\n\n${currentContent.substring(-2000)}` }],
+                          mode: 'write'
+                        })
+                      });
+                      const data = await res.json();
+                      if (res.ok && data.reply) {
+                        if (writeMode === 'single') {
+                          setContent(prev => prev + '\n\n' + data.reply);
+                        } else {
+                          // Add to current page or create new page
+                          const newPages = [...pages];
+                          const lastPage = newPages[newPages.length - 1];
+                          if (lastPage.length < 1500) {
+                            newPages[newPages.length - 1] = lastPage + '\n\n' + data.reply;
+                          } else {
+                            newPages.push(data.reply);
+                          }
+                          setPages(newPages);
+                          setCurrentPage(newPages.length - 1);
+                        }
+                        setShowAiReview(false);
+                      } else {
+                        alert('Failed to continue story. Please try again.');
+                      }
+                    } catch (err) {
+                      alert('Error connecting to AI. Please try again.');
+                    } finally {
+                      setIsContinuing(false);
+                    }
+                  }}
+                  disabled={isContinuing}
+                  className="flex-1 py-2.5 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isContinuing ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      Writing...
+                    </>
+                  ) : (
+                    <>✨ Yes, Continue Story</>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowAiReview(false)}
+                  disabled={isContinuing}
+                  className="px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Floating BXai Chat */}
       <>
         <div className="fixed bottom-6 right-6 z-30 flex items-center space-x-2 select-none cursor-pointer" onClick={() => setShowBxPopup(true)}>
@@ -543,77 +725,84 @@ function WritePageContent() {
         {showBxPopup && (
           <div className="fixed inset-0 z-40" onClick={() => setShowBxPopup(false)}>
             <div className="absolute inset-0 bg-black/30" />
-            <div className="absolute bottom-24 right-6 w-[400px] h-[500px] bg-neutral-900 text-white rounded-2xl shadow-xl z-50 flex flex-col" onClick={(e) => e.stopPropagation()}>
-              <div className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-center">
-                <p className="text-xs text-white/90">✨ New feature coming soon: <span className="font-semibold">AI Writer for you: BXai.v2</span></p>
+            <div className="absolute bottom-24 right-6 w-[400px] h-[550px] bg-neutral-900 text-white rounded-2xl shadow-xl z-50 flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-center rounded-t-2xl">
+                <p className="text-xs text-white/90">✨ AI Story Generation: <span className="font-semibold">Up to 8 pages</span> • More coming with BXai.v2!</p>
               </div>
-              <div className="px-4 py-3 border-b border-neutral-700 flex items-center justify-between">
-                <button className="text-gray-400 hover:text-white" onClick={() => setShowConversationList(!showConversationList)}>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-                </button>
-                <h3 className="text-center text-lg font-semibold flex-1 transition-all duration-300">{greetings[greetingIndex]}</h3>
-                <button className="text-gray-400 hover:text-white" onClick={() => { const newId = `conv-${Date.now()}`; const newConv = { id: newId, title: 'New Chat', messages: [] }; setConversations(prev => [...prev, newConv]); setActiveConversationId(newId); setChatMessages([]); }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                </button>
+              
+              {/* Mode Toggle */}
+              <div className="px-4 py-2 border-b border-neutral-700 flex items-center justify-center gap-2">
+                <button onClick={() => setAiMode('chat')} className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${aiMode === 'chat' ? 'bg-indigo-600 text-white' : 'bg-neutral-800 text-gray-400 hover:text-white'}`}>💬 Chat</button>
+                <button onClick={() => setAiMode('generate')} className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${aiMode === 'generate' ? 'bg-green-600 text-white' : 'bg-neutral-800 text-gray-400 hover:text-white'}`}>✨ Generate</button>
               </div>
-              {showConversationList && (
-                <div className="px-4 py-2 border-b border-neutral-700 max-h-32 overflow-y-auto">
-                  {conversations.length === 0 && <p className="text-gray-500 text-sm text-center">No conversations yet</p>}
-                  {conversations.map(conv => (
-                    <div key={conv.id} className="flex items-center justify-between group">
-                      <button onClick={() => { setActiveConversationId(conv.id); setChatMessages(conv.messages); setShowConversationList(false); }} className={`flex-1 text-left px-2 py-1 rounded text-sm ${conv.id === activeConversationId ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-neutral-800'}`}>{conv.title}</button>
-                      <button onClick={() => { const updated = conversations.filter(c => c.id !== conv.id); setConversations(updated); if (conv.id === activeConversationId) { if (updated.length > 0) { setActiveConversationId(updated[0].id); setChatMessages(updated[0].messages); } else { setActiveConversationId(null); setChatMessages([]); } } }} className="ml-2 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
 
-              {chatMessages.length === 0 && (
-                <div className="px-4 py-3 border-b border-neutral-700">
-                  <p className="text-gray-400 text-xs mb-2">Quick suggestions:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { label: '📚 Learn about BXARCHI', msg: 'Tell me about BXARCHI and what I can do here' },
-                      { label: '👨‍💻 Who is Raymond?', msg: 'Who is Raymond?' },
-                      { label: '🧭 Navigate', msg: 'Please help me navigate the website' },
-                      { label: '📖 Best books', msg: 'What are the best books on BXARCHI right now?' },
-                    ].map((suggestion, idx) => (
-                      <button key={idx} type="button" onClick={() => setChatInput(suggestion.msg)} className="px-3 py-1.5 text-sm rounded-full transition-colors border bg-neutral-800 hover:bg-neutral-700 text-gray-300 hover:text-white border-neutral-700">{suggestion.label}</button>
+              {aiMode === 'chat' ? (
+                <>
+                  <div className="px-4 py-2 border-b border-neutral-700 flex items-center justify-between">
+                    <button className="text-gray-400 hover:text-white" onClick={() => setShowConversationList(!showConversationList)}>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                    </button>
+                    <h3 className="text-center text-base font-semibold flex-1 transition-all duration-300">{greetings[greetingIndex]}</h3>
+                    <button className="text-gray-400 hover:text-white" onClick={() => { const newId = `conv-${Date.now()}`; const newConv = { id: newId, title: 'New Chat', messages: [] }; setConversations(prev => [...prev, newConv]); setActiveConversationId(newId); setChatMessages([]); }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    </button>
+                  </div>
+                  {showConversationList && (
+                    <div className="px-4 py-2 border-b border-neutral-700 max-h-32 overflow-y-auto">
+                      {conversations.length === 0 && <p className="text-gray-500 text-sm text-center">No conversations yet</p>}
+                      {conversations.map(conv => (
+                        <div key={conv.id} className="flex items-center justify-between group">
+                          <button onClick={() => { setActiveConversationId(conv.id); setChatMessages(conv.messages); setShowConversationList(false); }} className={`flex-1 text-left px-2 py-1 rounded text-sm ${conv.id === activeConversationId ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-neutral-800'}`}>{conv.title}</button>
+                          <button onClick={() => { const updated = conversations.filter(c => c.id !== conv.id); setConversations(updated); if (conv.id === activeConversationId) { if (updated.length > 0) { setActiveConversationId(updated[0].id); setChatMessages(updated[0].messages); } else { setActiveConversationId(null); setChatMessages([]); } } }} className="ml-2 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {chatMessages.length === 0 && (
+                    <div className="px-4 py-3 border-b border-neutral-700">
+                      <p className="text-gray-400 text-xs mb-2">Quick suggestions:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { label: '📚 About BXARCHI', msg: 'Tell me about BXARCHI' },
+                          { label: '👨‍💻 Who is Raymond?', msg: 'Who is Raymond?' },
+                          { label: '📖 Best books', msg: 'What are the best books on BXARCHI?' },
+                        ].map((suggestion, idx) => (
+                          <button key={idx} type="button" onClick={() => setChatInput(suggestion.msg)} className="px-3 py-1.5 text-sm rounded-full transition-colors border bg-neutral-800 hover:bg-neutral-700 text-gray-300 hover:text-white border-neutral-700">{suggestion.label}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 text-sm" id="bx-chat-messages">
+                    {chatMessages.length === 0 && <p className="text-gray-400 text-center mt-4">Start a conversation…</p>}
+                    {chatMessages.map((msg, i) => (
+                      <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] px-3 py-2 rounded-lg whitespace-pre-wrap ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-neutral-800 text-white border border-neutral-600'}`}>
+                          {msg.isLoader ? (
+                            <div className="animate-pulse">Thinking<span className="inline-flex"><span className="animate-bounce" style={{ animationDelay: '0ms' }}>.</span><span className="animate-bounce" style={{ animationDelay: '150ms' }}>.</span><span className="animate-bounce" style={{ animationDelay: '300ms' }}>.</span></span></div>
+                          ) : (
+                            (typeof msg.text === 'string' ? msg.text : String(msg.text || '')).split(/(\/books\/[a-zA-Z0-9]+|\/[a-z-]+|\[.*?\]\(.*?\)|https?:\/\/[^\s]+)/g).map((part, idx) => {
+                              const mdLinkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
+                              if (mdLinkMatch) return <Link key={idx} href={mdLinkMatch[2]} className="text-indigo-400 hover:text-indigo-300 underline">{mdLinkMatch[1]}</Link>;
+                              if (part.match(/^\/books\/[a-zA-Z0-9]+$/) || part.match(/^\/[a-z-]+$/)) return <Link key={idx} href={part} className="text-indigo-400 hover:text-indigo-300 underline">{part}</Link>;
+                              if (part.match(/^https?:\/\//)) return <a key={idx} href={part} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">{part}</a>;
+                              return <span key={idx}>{part}</span>;
+                            })
+                          )}
+                        </div>
+                      </div>
                     ))}
                   </div>
-                </div>
-              )}
-              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 text-sm" id="bx-chat-messages">
-                {chatMessages.length === 0 && <p className="text-gray-400 text-center mt-4">Start a conversation…</p>}
-                {chatMessages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] px-3 py-2 rounded-lg whitespace-pre-wrap ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-neutral-800 text-white border border-neutral-600'}`}>
-                      {msg.isLoader ? (
-                        <div className="animate-pulse">Thinking<span className="inline-flex"><span className="animate-bounce" style={{ animationDelay: '0ms' }}>.</span><span className="animate-bounce" style={{ animationDelay: '150ms' }}>.</span><span className="animate-bounce" style={{ animationDelay: '300ms' }}>.</span></span></div>
-                      ) : (
-                        (typeof msg.text === 'string' ? msg.text : String(msg.text || '')).split(/(\/books\/[a-zA-Z0-9]+|\/[a-z-]+|\[.*?\]\(.*?\)|https?:\/\/[^\s]+)/g).map((part, idx) => {
-                          const mdLinkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
-                          if (mdLinkMatch) return <Link key={idx} href={mdLinkMatch[2]} className="text-indigo-400 hover:text-indigo-300 underline">{mdLinkMatch[1]}</Link>;
-                          if (part.match(/^\/books\/[a-zA-Z0-9]+$/) || part.match(/^\/[a-z-]+$/)) return <Link key={idx} href={part} className="text-indigo-400 hover:text-indigo-300 underline">{part}</Link>;
-                          if (part.match(/^https?:\/\//)) return <a key={idx} href={part} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">{part}</a>;
-                          return <span key={idx}>{part}</span>;
-                        })
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <form className="p-4 flex items-center space-x-2 border-t border-neutral-700" onSubmit={async (e) => {
-                e.preventDefault();
-                if (!chatInput.trim()) return;
-                const userMsg = chatInput.trim();
-                const newMsg = { role: 'user' as const, text: userMsg };
-                const updatedMessages = [...chatMessages, newMsg];
-                setChatMessages(updatedMessages);
-                setChatInput('');
-                if (activeConversationId) {
+                  <form className="p-4 flex items-center space-x-2 border-t border-neutral-700" onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!chatInput.trim()) return;
+                    const userMsg = chatInput.trim();
+                    const newMsg = { role: 'user' as const, text: userMsg };
+                    const updatedMessages = [...chatMessages, newMsg];
+                    setChatMessages(updatedMessages);
+                    setChatInput('');
+                    if (activeConversationId) {
                   setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: updatedMessages, title: userMsg.slice(0, 30) + (userMsg.length > 30 ? '…' : '') } : c));
                 } else {
                   const newId = `conv-${Date.now()}`;
@@ -662,6 +851,256 @@ function WritePageContent() {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" /></svg>
                 </button>
               </form>
+                </>
+              ) : (
+                /* Generate Mode UI */
+                <div className="flex-1 flex flex-col p-4 overflow-y-auto">
+                  {generatedPreview ? (
+                    /* Preview Screen */
+                    <div className="flex flex-col h-full">
+                      <div className="text-center mb-3">
+                        <h3 className="text-base font-semibold text-green-400">✨ Your Story is Ready!</h3>
+                      </div>
+                      <div className="bg-neutral-800 rounded-lg p-3 mb-3">
+                        <p className="text-xs text-gray-400">Title</p>
+                        <p className="text-sm font-medium">{generatedPreview.title}</p>
+                      </div>
+                      <div className="bg-neutral-800 rounded-lg p-3 mb-3">
+                        <p className="text-xs text-gray-400">Description</p>
+                        <p className="text-sm">{generatedPreview.description}</p>
+                      </div>
+                      <div className="bg-neutral-800 rounded-lg p-3 mb-3 flex-1 overflow-y-auto max-h-40">
+                        <p className="text-xs text-gray-400 mb-1">Story Preview</p>
+                        <p className="text-xs text-gray-300 whitespace-pre-wrap">{generatedPreview.content.substring(0, 500)}...</p>
+                      </div>
+                      <div className="space-y-3">
+                        <button
+                          onClick={() => {
+                            // Apply to form
+                            setTitle(generatedPreview.title);
+                            setDescription(generatedPreview.description);
+                            setGenre(generatedPreview.genre);
+                            setWriteMode(generateWriteMode);
+                            
+                            if (generateWriteMode === 'single') {
+                              setContent(generatedPreview.content);
+                            } else {
+                              // Split into the number of pages user selected
+                              const totalLength = generatedPreview.content.length;
+                              const pageSize = Math.ceil(totalLength / generatePages);
+                              const newPages: string[] = [];
+                              for (let i = 0; i < generatePages; i++) {
+                                const start = i * pageSize;
+                                const end = Math.min(start + pageSize, totalLength);
+                                if (start < totalLength) {
+                                  newPages.push(generatedPreview.content.substring(start, end));
+                                }
+                              }
+                              setPages(newPages.length > 0 ? newPages : ['']);
+                            }
+                            
+                            setGeneratedPreview(null);
+                            setShowBxPopup(false);
+                          }}
+                          className="w-full py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 flex items-center justify-center gap-2"
+                        >
+                          ✅ Yes, Use This Story
+                        </button>
+                        <button
+                          onClick={() => setGeneratedPreview(null)}
+                          className="w-full py-2.5 bg-neutral-700 text-white rounded-lg font-medium hover:bg-neutral-600 flex items-center justify-center gap-2"
+                        >
+                          ❌ No, Try Again
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Input Screen */
+                    <>
+                      <div className="text-center mb-3">
+                        <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                          <span className="text-2xl">✨</span>
+                        </div>
+                        <h3 className="text-base font-semibold">{aiWriteEnabled ? 'AI Story Generator' : 'Story Setup'}</h3>
+                        <p className="text-gray-400 text-xs">{aiWriteEnabled ? 'AI creates everything • Up to 8 pages' : 'Fill in your story details'}</p>
+                      </div>
+                      
+                      {/* AI Write Toggle */}
+                      <div className="flex items-center justify-between p-3 bg-neutral-800 rounded-lg mb-3">
+                        <div>
+                          <p className="text-sm font-medium">AI Write Mode</p>
+                          <p className="text-xs text-gray-400">{aiWriteEnabled ? 'AI fills everything' : 'You write your own story'}</p>
+                        </div>
+                        <button
+                          onClick={() => setAiWriteEnabled(!aiWriteEnabled)}
+                          className={`w-12 h-6 rounded-full transition-colors relative ${aiWriteEnabled ? 'bg-green-500' : 'bg-neutral-600'}`}
+                        >
+                          <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform ${aiWriteEnabled ? 'translate-x-6' : 'translate-x-0.5'}`}></div>
+                        </button>
+                      </div>
+                      
+                      {/* Write Mode Selection */}
+                      <div className="mb-3">
+                        <label className="block text-xs text-gray-400 mb-1">Writing Mode</label>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setGenerateWriteMode('single')}
+                            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${generateWriteMode === 'single' ? 'bg-indigo-600 text-white' : 'bg-neutral-800 text-gray-400 hover:text-white'}`}
+                          >
+                            📝 Single Page
+                          </button>
+                          <button
+                            onClick={() => setGenerateWriteMode('pages')}
+                            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${generateWriteMode === 'pages' ? 'bg-indigo-600 text-white' : 'bg-neutral-800 text-gray-400 hover:text-white'}`}
+                          >
+                            📚 Multiple (8)
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Title {aiWriteEnabled && <span className="text-green-400">(AI will generate)</span>}</label>
+                          <input
+                            type="text"
+                            value={generateTitle}
+                            onChange={(e) => setGenerateTitle(e.target.value)}
+                            placeholder={aiWriteEnabled ? "AI will create a title..." : "Enter story title..."}
+                            className={`w-full bg-neutral-800 text-white placeholder-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 ${aiWriteEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={aiWriteEnabled || isGenerating}
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Genre {aiWriteEnabled && <span className="text-green-400">(AI will pick)</span>}</label>
+                          <select
+                            value={generateGenre}
+                            onChange={(e) => setGenerateGenre(e.target.value)}
+                            className={`w-full bg-neutral-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 ${aiWriteEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={aiWriteEnabled || isGenerating}
+                          >
+                            {allGenres.map(g => (
+                              <option key={g.value} value={g.value}>{g.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Description {aiWriteEnabled && <span className="text-green-400">(AI will write)</span>}</label>
+                          <textarea
+                            value={generatePrompt}
+                            onChange={(e) => setGeneratePrompt(e.target.value)}
+                            placeholder={aiWriteEnabled ? "AI will create a description..." : "Brief description of your book..."}
+                            className={`w-full h-16 bg-neutral-800 text-white placeholder-gray-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none ${aiWriteEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={aiWriteEnabled || isGenerating}
+                          />
+                        </div>
+                        
+                        {aiWriteEnabled && generateWriteMode === 'pages' && (
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1">Pages: {generatePages}</label>
+                            <input
+                              type="range"
+                              min="1"
+                              max="8"
+                              value={generatePages}
+                              onChange={(e) => setGeneratePages(Number(e.target.value))}
+                              className="w-full accent-green-500"
+                              disabled={isGenerating}
+                            />
+                            <div className="flex justify-between text-xs text-gray-500">
+                              <span>1 page</span>
+                              <span>8 pages (max)</span>
+                            </div>
+                          </div>
+                        )}
+                        
+                        <button
+                          onClick={async () => {
+                            if (aiWriteEnabled) {
+                              // AI Generate mode - AI creates everything
+                              if (isGenerating) return;
+                              setIsGenerating(true);
+                              try {
+                                const randomGenre = allGenres[Math.floor(Math.random() * allGenres.length)];
+                                
+                                const res = await fetch('/api/chat', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    messages: [{ role: 'user', text: `Write a VERY LONG ${randomGenre.label} story that is approximately ${generatePages} pages (about ${generatePages * 500} words or ${generatePages * 3000} characters).
+
+IMPORTANT: Write a COMPLETE, LENGTHY story. Do not summarize. Write full scenes with detailed descriptions, dialogue, and character development.
+
+First line: Just the story title (no quotes, no "Title:" prefix)
+Second line: A one-sentence description/tagline for the book
+Then: The full story with flowing narrative prose, dialogue and description. No page numbers or headers. Make it as long as possible.` }],
+                                    mode: 'write'
+                                  })
+                                });
+                                const data = await res.json();
+                                if (res.ok && data.reply) {
+                                  const lines = data.reply.split('\n').filter((l: string) => l.trim());
+                                  const aiTitle = lines[0]?.replace(/^[#*"\s]+|[#*"\s]+$/g, '').trim() || 'Untitled Story';
+                                  const aiDescription = lines[1]?.replace(/^[#*"\s]+|[#*"\s]+$/g, '').trim() || `A ${randomGenre.label} story`;
+                                  const aiContent = lines.slice(2).join('\n').trim();
+                                  
+                                  // Show preview instead of directly applying
+                                  setGeneratedPreview({
+                                    title: aiTitle,
+                                    description: aiDescription,
+                                    genre: randomGenre.value,
+                                    content: aiContent
+                                  });
+                                } else {
+                                  alert(data.error || 'Failed to generate story');
+                                }
+                              } catch (err) {
+                                console.error('Generate error:', err);
+                                alert('Failed to generate story. Please try again.');
+                              } finally {
+                                setIsGenerating(false);
+                              }
+                            } else {
+                              // User write mode - show preview with their details
+                              if (!generateTitle.trim()) return;
+                              setGeneratedPreview({
+                                title: generateTitle,
+                                description: generatePrompt,
+                                genre: generateGenre,
+                                content: ''
+                              });
+                            }
+                          }}
+                          disabled={(!aiWriteEnabled && !generateTitle.trim()) || isGenerating}
+                          className={`w-full py-2.5 text-white rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${
+                            aiWriteEnabled 
+                              ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700' 
+                              : 'bg-indigo-600 hover:bg-indigo-700'
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                          {isGenerating ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              AI is writing...
+                            </>
+                          ) : aiWriteEnabled ? (
+                            <>
+                              <span>✨</span>
+                              Let AI Write
+                            </>
+                          ) : (
+                            <>
+                              <span>📝</span>
+                              Continue
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

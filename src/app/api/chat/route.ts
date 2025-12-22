@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase/admin';
 
-// Choose provider: 'openai' | 'anthropic' | 'groq' | 'rush' | 'gtwy'
-const PROVIDER = (process.env.CHAT_PROVIDER || 'openai').toLowerCase();
+// Choose provider: 'openai' | 'anthropic' | 'groq' | 'rush' | 'gtwy' | 'gemini'
+// CHAT_PROVIDER is used for chat mode, GENERATE_PROVIDER for story generation
+const CHAT_PROVIDER = (process.env.CHAT_PROVIDER || 'groq').toLowerCase();
+const GENERATE_PROVIDER = (process.env.GENERATE_PROVIDER || 'gemini').toLowerCase();
 
 // API keys from environment
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
@@ -11,6 +13,7 @@ const GROQ_KEY = process.env.GROQ_API_KEY;
 const RUSH_KEY = process.env.RUSH_API_KEY;
 const GTWY_AUTH_KEY = process.env.GTWY_AUTH_KEY;
 const GTWY_AGENT_ID = process.env.GTWY_AGENT_ID;
+const GEMINI_KEY = process.env.GEMINI_API_KEY;
 
 // Fetch books from Firestore for AI context
 async function fetchBooksForAI(): Promise<string> {
@@ -93,6 +96,28 @@ He's passionate about building tools that help people create and discover great 
 
 **Want to connect with Raymond?**
 - Instagram: [@rayanlock58](https://www.instagram.com/rayanlock58/)
+
+## STORY GENERATION FEATURE
+When users ask about generating stories or want help creating a story, tell them:
+
+**Current AI Story Generation (BXai.v1):**
+- You can generate stories up to **50 pages** right now
+- Just tell me what kind of story you want (genre, characters, plot idea) and I'll help you create it!
+- I'll write the story content that you can then paste into the writing area below
+
+**Coming Soon with BXai.v2:**
+- Generate stories up to **10,000+ pages**
+- Automatic chapter organization
+- Multiple story styles and formats
+- Stay tuned for updates! 🚀
+
+If they want to generate a story NOW, ask them for:
+1. Genre (fantasy, romance, mystery, sci-fi, etc.)
+2. Main character name and brief description
+3. Basic plot idea or theme
+4. Desired length (1-50 pages)
+
+Then generate the story content for them!
 
 ## BOOKS IN BXARCHI (You have read ALL of these!)
 You have access to every book on BXARCHI - both published and drafts. When users ask for book recommendations, ALWAYS recommend books from this list first. Include the link so they can read it!
@@ -212,8 +237,8 @@ When a writer shares their work or ideas:
 
 Remember: Your goal is to help writers feel confident and inspired while giving them the tools to improve their craft. Every writer has a unique voice — help them find and strengthen it.`;
 
-function getProviderConfig() {
-  switch (PROVIDER) {
+function getProviderConfig(provider: string) {
+  switch (provider) {
     case 'openai':
       if (!OPENAI_KEY) throw new Error('Missing OPENAI_API_KEY');
       return {
@@ -273,6 +298,17 @@ function getProviderConfig() {
         model: undefined,
         extract: (data: any) => data.response?.data?.content || '',
       };
+    case 'gemini':
+      if (!GEMINI_KEY) throw new Error('Missing GEMINI_API_KEY');
+      return {
+        url: 'https://openrouter.ai/api/v1/chat/completions',
+        headers: {
+          'Authorization': `Bearer ${GEMINI_KEY}`,
+          'Content-Type': 'application/json',
+        } as Record<string, string>,
+        model: 'nvidia/nemotron-3-nano-30b-a3b',
+        extract: (data: any) => data.choices?.[0]?.message?.content || '',
+      };
     default:
       throw new Error('Unsupported CHAT_PROVIDER');
   }
@@ -318,6 +354,14 @@ function formatMessages(messages: Array<{ role: string; text: string }>, provide
       }
     };
   }
+  if (provider === 'gemini') {
+    // OpenRouter uses OpenAI-compatible format
+    return {
+      messages: msgs,
+      max_tokens: 16000,
+      temperature: 0.8,
+    };
+  }
   return {
     messages: msgs,
     max_tokens: 2048,
@@ -327,14 +371,15 @@ function formatMessages(messages: Array<{ role: string; text: string }>, provide
 
 export async function POST(req: NextRequest) {
   try {
-    console.log('CHAT_PROVIDER env:', process.env.CHAT_PROVIDER);
-    console.log('Using PROVIDER:', PROVIDER);
-
     const { messages, mode = 'chat' } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Invalid messages' }, { status: 400 });
     }
+
+    // Choose provider based on mode: Groq for chat, Gemini for write/generate
+    const provider = mode === 'write' ? GENERATE_PROVIDER : CHAT_PROVIDER;
+    console.log('Mode:', mode, '| Provider:', provider);
 
     // Choose prompt based on mode
     let systemPrompt: string;
@@ -346,12 +391,12 @@ export async function POST(req: NextRequest) {
       systemPrompt = getWritingAssistantPrompt(booksData);
     }
 
-    const config = getProviderConfig();
+    const config = getProviderConfig(provider);
     let body: string;
-    if (PROVIDER === 'rush') {
-      body = JSON.stringify(formatMessages(messages, PROVIDER, systemPrompt));
+    if (provider === 'rush') {
+      body = JSON.stringify(formatMessages(messages, provider, systemPrompt));
     } else {
-      const formatted = formatMessages(messages, PROVIDER, systemPrompt);
+      const formatted = formatMessages(messages, provider, systemPrompt);
       body = JSON.stringify({
         model: config.model,
         ...formatted,
