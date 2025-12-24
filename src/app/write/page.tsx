@@ -725,7 +725,7 @@ function WritePageContent() {
         {showBxPopup && (
           <div className="fixed inset-0 z-40" onClick={() => setShowBxPopup(false)}>
             <div className="absolute inset-0 bg-black/30" />
-            <div className="absolute bottom-24 right-6 w-[400px] h-[550px] bg-neutral-900 text-white rounded-2xl shadow-xl z-50 flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute bottom-24 right-2 left-2 mx-auto w-11/12 h-5/6 sm:right-6 sm:left-auto sm:w-96 sm:h-96 bg-neutral-900 text-white rounded-lg shadow-xl z-50 flex flex-col" onClick={(e) => e.stopPropagation()}>
               <div className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-center rounded-t-2xl">
                 <p className="text-xs text-white/90">✨ AI Story Generation: <span className="font-semibold">Up to 8 pages</span> • More coming with BXai.v2!</p>
               </div>

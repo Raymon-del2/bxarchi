@@ -5,10 +5,7 @@ const nextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
-      { protocol: 'https', hostname: 'covers.openlibrary.org' },
       { protocol: 'https', hostname: 'firebasestorage.googleapis.com' },
-      { protocol: 'https', hostname: 'www.gutenberg.org' },
-      { protocol: 'http',  hostname: 'www.gutenberg.org' },
     ],
     // Allow Base64 images
     dangerouslyAllowSVG: true,

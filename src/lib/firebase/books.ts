@@ -226,7 +226,7 @@ export const toggleBookThumb = async (bookId: string, userId: string, thumbType:
         createdAt: serverTimestamp(),
       });
       
-      // Update counts in both books and cachedGutendexBooks collections
+      // Update counts in books collection
       await updateThumbCounts(bookId, thumbType, 1);
       
       return { liked: thumbType === 'like', disliked: thumbType === 'dislike', error: null };
@@ -266,16 +266,6 @@ const updateThumbCounts = async (bookId: string, thumbType: 'like' | 'dislike', 
   if (bookSnap.exists()) {
     const currentCount = bookSnap.data()[thumbType === 'like' ? 'likes' : 'dislikes'] || 0;
     await updateDoc(bookRef, {
-      [thumbType === 'like' ? 'likes' : 'dislikes']: Math.max(0, currentCount + delta),
-    });
-  }
-  
-  // Update cachedGutendexBooks collection
-  const cachedBookRef = doc(db, 'cachedGutendexBooks', bookId);
-  const cachedBookSnap = await getDoc(cachedBookRef);
-  if (cachedBookSnap.exists()) {
-    const currentCount = cachedBookSnap.data()[thumbType === 'like' ? 'likes' : 'dislikes'] || 0;
-    await updateDoc(cachedBookRef, {
       [thumbType === 'like' ? 'likes' : 'dislikes']: Math.max(0, currentCount + delta),
     });
   }

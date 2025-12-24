@@ -90,31 +90,6 @@ export default function ReadingListPage() {
               isLiked: liked,
               isDisliked: disliked
             } as Book);
-          } else {
-            // Try to get from cached Gutendex books
-            const cachedBookRef = doc(db, 'cachedGutendexBooks', bookId);
-            const cachedBookSnap = await getDoc(cachedBookRef);
-            
-            if (cachedBookSnap.exists()) {
-              const cachedBookData = cachedBookSnap.data();
-              const { liked, disliked } = await checkUserThumb(bookId, user.uid);
-              const { likeCount, dislikeCount } = await getThumbCounts(bookId);
-              likedBooksData.push({
-                id: cachedBookSnap.id,
-                title: cachedBookData.title,
-                description: cachedBookData.description,
-                genre: cachedBookData.genre,
-                coverImage: cachedBookData.coverImage,
-                authorName: cachedBookData.authorName,
-                authorId: 'gutendex',
-                published: true,
-                views: 0,
-                likes: likeCount,
-                dislikes: dislikeCount,
-                isLiked: liked,
-                isDisliked: disliked
-              } as Book);
-            }
           }
         }
         setLikedBooks(likedBooksData);
@@ -130,19 +105,9 @@ export default function ReadingListPage() {
         for (const progressDoc of progressSnapshot.docs) {
           const progressData = progressDoc.data();
           
-          // Check if it's a Gutendex book (starts with 'gutendex-')
-          const isGutendex = progressData.bookId.startsWith('gutendex-');
-          
-          let bookSnap;
-          if (isGutendex) {
-            // Try to get from cached Gutendex books
-            const cachedBookRef = doc(db, 'cachedGutendexBooks', progressData.bookId);
-            bookSnap = await getDoc(cachedBookRef);
-          } else {
-            // Get from regular books collection
-            const bookRef = doc(db, 'books', progressData.bookId);
-            bookSnap = await getDoc(bookRef);
-          }
+          // Get from regular books collection
+          const bookRef = doc(db, 'books', progressData.bookId);
+          const bookSnap = await getDoc(bookRef);
           
           if (bookSnap && bookSnap.exists()) {
             const bookData = bookSnap.data();
@@ -227,15 +192,13 @@ export default function ReadingListPage() {
 
     return (
       <div className="flex-shrink-0 w-64 bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-lg transition-all hover:scale-105 relative">
-        <Link href={book.authorId === 'gutendex' ? `/books/gutendex/${book.id.replace('gutendex-', '')}` : `/books/${book.id}`}>
+        <Link href={`/books/${book.id}`}>
           <div className="relative h-80">
-            {book.authorId === 'gutendex' && (
-              <div className="absolute top-2 right-2 z-10">
-                <span className="inline-flex items-center px-2 py-1 text-xs font-bold bg-purple-500 text-white rounded-full shadow-lg">
-                  📚 GUTENDEX
-                </span>
-              </div>
-            )}
+            <div className="absolute top-2 right-2 z-10">
+              <span className="inline-flex items-center px-2 py-1 text-xs font-bold bg-indigo-500 text-white rounded-full shadow-lg">
+                ✍️ BXARCHI
+              </span>
+            </div>
             <Image
               src={book.coverImage}
               alt={book.title}
